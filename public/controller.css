@@ -137,6 +137,12 @@ h2 { font-size: 19px; margin: 28px 4px 12px; }
 .tile.fired::after {
   content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.25); animation: fade 0.5s forwards;
 }
+.tile.custom { border-bottom-color: var(--good); }
+.tile .badge {
+  position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 600;
+  background: var(--good); color: #05210f; padding: 1px 6px; border-radius: 999px;
+}
+.section-note { margin: -6px 4px 10px; font-size: 13px; color: var(--muted); }
 @keyframes fade { to { opacity: 0; } }
 
 .card {

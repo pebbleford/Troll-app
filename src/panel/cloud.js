@@ -40,11 +40,13 @@
     switch (obj.type) {
       case 'state': lastState = obj.state; cloud.writeDoc('state', obj.state); break;
       case 'media': lastMedia = obj.list; cloud.writeDoc('media', obj.list); break;
-      case 'apps': cloud.writeDoc('apps', obj.list); break;
+      case 'apps': cloud.writeDoc('apps', { list: obj.list, error: obj.error || '' }); break;
+      case 'soundMap': cloud.writeDoc('soundmap', obj.map || {}); break;
       case 'hello':
         lastState = obj.state; lastMedia = obj.media;
         cloud.writeDoc('state', obj.state);
         cloud.writeDoc('media', obj.media);
+        cloud.writeDoc('soundmap', obj.soundMap || {});
         break;
       case 'closed':
       case 'error':

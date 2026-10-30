@@ -74,7 +74,7 @@ function stopAll() {
 }
 
 const FX = {
-  jumpscare: () => { Sounds.scream(); Visuals.jumpscare(); },
+  jumpscare: (fx) => { if (fx && fx.soundSrc) playFile(fx.soundSrc); else Sounds.scream(); Visuals.jumpscare(); },
   flashbang: () => { Sounds.flashbang(); Visuals.flashbang(); },
   crash: () => Visuals.crash(),
   crack: () => { Sounds.glass(); Visuals.crack(); },

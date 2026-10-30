@@ -66,6 +66,7 @@ function loadConfig() {
     const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     cfg.code = Array.from(crypto.randomBytes(6), (b) => alphabet[b % alphabet.length]).join('');
   }
+  if (!cfg.soundMap || typeof cfg.soundMap !== 'object') cfg.soundMap = {};
   return cfg;
 }
 
@@ -82,11 +83,16 @@ function saveConfig() {
 
 function applyAutoLaunch() {
   try {
-    app.setLoginItemSettings({
+    // When packaged, the login item is just our exe + --hidden. When running
+    // unpackaged (via start.bat → `electron .`), the login item must relaunch
+    // electron WITH the app folder, or a reboot would start a blank Electron.
+    const settings = {
       openAtLogin: !!config.openAtLogin,
-      openAsHidden: true,
-      args: ['--hidden'],
-    });
+      openAsHidden: true,                 // macOS
+      path: process.execPath,
+      args: app.isPackaged ? ['--hidden'] : [ROOT, '--hidden'],
+    };
+    app.setLoginItemSettings(settings);
   } catch (err) {
     console.error('Could not change the start-on-login setting:', err.message);
   }
@@ -377,16 +383,38 @@ function cleanFx(fx) {
   return out;
 }
 
+// Build a media-playback fx for one of your uploaded audio files.
+function soundFileFx(name) {
+  const base = path.basename(String(name || ''));
+  const file = path.join(MEDIA_DIR, base);
+  if (mediaKind(base) === 'audio' && fs.existsSync(file)) {
+    return { id: 'media', kind: 'audio', mode: 'play', name: base, src: pathToFileURL(file).href };
+  }
+  return null;
+}
+
+// If the user has assigned a real sound file to a built-in button, use it.
+function applySoundMap(fx) {
+  const mapped = config.soundMap && config.soundMap[fx.id];
+  if (!mapped) return fx;
+  const f = soundFileFx(mapped);
+  if (!f) return fx;
+  // Jumpscare keeps its face but swaps the scream for your file.
+  if (fx.id === 'jumpscare') { fx.soundSrc = f.src; return fx; }
+  return f;
+}
+
 // `reply` sends a message back to whichever remote asked (LAN socket or cloud).
 async function handleMessage(msg, reply) {
   if (!msg || typeof msg.type !== 'string') return;
   switch (msg.type) {
     case 'hello':
-      reply({ type: 'hello', pcName: os.hostname(), state: director.state(), media: server.listMedia() });
+      reply({ type: 'hello', pcName: os.hostname(), state: director.state(), media: server.listMedia(), soundMap: config.soundMap });
       break;
     case 'fx': {
-      const fx = cleanFx(msg.fx);
+      let fx = cleanFx(msg.fx);
       if (!fx) return reply({ type: 'error', text: 'Unknown effect or missing file.' });
+      fx = applySoundMap(fx);
       director.trigger(fx, msg.delay, typeof msg.label === 'string' ? msg.label.slice(0, 40) : fx.id);
       break;
     }
@@ -404,17 +432,35 @@ async function handleMessage(msg, reply) {
       break;
     case 'deleteMedia': {
       const name = path.basename(String(msg.name || ''));
-      if (mediaKind(name)) fs.rm(path.join(MEDIA_DIR, name), { force: true }, () => server.broadcastMedia());
+      if (!mediaKind(name)) break;
+      fs.rm(path.join(MEDIA_DIR, name), { force: true }, () => server.broadcastMedia());
+      // Drop any soundboard buttons that were using this file.
+      let changed = false;
+      for (const k of Object.keys(config.soundMap)) if (config.soundMap[k] === name) { delete config.soundMap[k]; changed = true; }
+      if (changed) { saveConfig(); server.broadcast({ type: 'soundMap', map: config.soundMap }); cloudPush({ type: 'soundMap', map: config.soundMap }); }
       break;
     }
-    case 'listApps':
-      reply({ type: 'apps', list: await processes.listApps() });
+    case 'listApps': {
+      const list = await processes.listApps();
+      reply({ type: 'apps', list, error: processes.getLastError() });
       break;
+    }
     case 'closeApp': {
       const res = await processes.closeApp(msg.pid);
       reply({ type: 'closed', ok: res.ok, name: res.name, error: res.error });
-      // Give the app a moment to disappear, then send a fresh list.
-      setTimeout(async () => reply({ type: 'apps', list: await processes.listApps() }), 600);
+      // closeApp already waited for it to die; send a fresh list now.
+      reply({ type: 'apps', list: await processes.listApps(), error: processes.getLastError() });
+      break;
+    }
+    case 'mapSound': {
+      const id = String(msg.id || '');
+      if (!FX_IDS.has(id)) break;
+      const name = path.basename(String(msg.name || ''));
+      if (name && mediaKind(name) === 'audio' && fs.existsSync(path.join(MEDIA_DIR, name))) config.soundMap[id] = name;
+      else delete config.soundMap[id];
+      saveConfig();
+      server.broadcast({ type: 'soundMap', map: config.soundMap });
+      cloudPush({ type: 'soundMap', map: config.soundMap });
       break;
     }
   }
@@ -486,8 +532,12 @@ if (!app.requestSingleInstanceLock()) {
     createPanel();
     createTray();
 
-    const startHidden = process.argv.includes('--hidden') || app.getLoginItemSettings().wasOpenedAtLogin;
-    panel.once('ready-to-show', () => { if (!startHidden) panel.show(); else hideToTray(); });
+    let li = {};
+    try { li = app.getLoginItemSettings(); } catch { /* */ }
+    // Started by Windows/macOS at login (or with --hidden) → go straight to the
+    // tray, never flashing the window.
+    const startHidden = process.argv.includes('--hidden') || li.wasOpenedAtLogin || li.wasOpenedAsHidden || !!config.startMinimized;
+    panel.once('ready-to-show', () => { if (startHidden) hideToTray(); else panel.show(); });
 
     globalShortcut.register(SHORTCUT_PANEL, () => togglePanel());
     globalShortcut.register(SHORTCUT_PANIC, () => director.stopAll());

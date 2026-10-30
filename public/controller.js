@@ -36,6 +36,7 @@ let voice = 'normal';
 let msgStyle = 'creepy';
 let pending = [];
 let mediaList = [];
+let soundMap = {};
 
 // ------------------------------------------------------------ toast
 
@@ -79,10 +80,12 @@ function handleIncoming(msg) {
       setStatus('ok', `Connected to ${msg.pcName || 'your PC'}`);
       applyState(msg.state || {});
       renderMedia(msg.media || []);
+      setSoundMap(msg.soundMap || {});
       break;
     case 'state': applyState(msg.state || {}); break;
     case 'media': renderMedia(msg.list || []); break;
-    case 'apps': renderApps(msg.list || []); break;
+    case 'soundMap': setSoundMap(msg.map || {}); break;
+    case 'apps': renderApps(msg.list || [], msg.error); break;
     case 'closed': toast(msg.ok ? `Closed ${msg.name}` : (msg.error || 'Could not close that app'), !msg.ok); break;
     case 'error': toast(msg.text, true); break;
   }
@@ -164,7 +167,8 @@ function startCloudReceivers() {
   setStatus('ok', 'Connected via cloud');
   Net.cloudSubs.push(TrollCloud.watchDoc('state', (r) => handleIncoming({ type: 'state', state: r.data })));
   Net.cloudSubs.push(TrollCloud.watchDoc('media', (r) => handleIncoming({ type: 'media', list: r.data })));
-  Net.cloudSubs.push(TrollCloud.watchDoc('apps', (r) => handleIncoming({ type: 'apps', list: r.data })));
+  Net.cloudSubs.push(TrollCloud.watchDoc('soundmap', (r) => handleIncoming({ type: 'soundMap', map: r.data })));
+  Net.cloudSubs.push(TrollCloud.watchDoc('apps', (r) => handleIncoming({ type: 'apps', list: (r.data && r.data.list) || [], error: r.data && r.data.error })));
   Net.cloudSubs.push(TrollCloud.watchDoc('notice', (r) => {
     if ((r.at || 0) > Net.lastNotice) { Net.lastNotice = r.at || Date.now(); handleIncoming(r.data || {}); }
   }));
@@ -216,6 +220,7 @@ function buildTiles(container, list, kind) {
   for (const [id, icon, name, sub] of list) {
     const b = document.createElement('button');
     b.className = `tile ${kind}`;
+    b.dataset.fxId = id;
     b.innerHTML = `<span class="icon">${icon}</span><span>${name}</span>${sub ? `<small>${sub}</small>` : ''}`;
     b.addEventListener('click', () => fire({ id }, name, b));
     container.appendChild(b);
@@ -223,6 +228,18 @@ function buildTiles(container, list, kind) {
 }
 buildTiles($('scares'), SCARES, 'scare');
 buildTiles($('sounds'), SOUNDS, 'sound');
+
+// Show a little badge on sound buttons that play one of your own files.
+function setSoundMap(map) {
+  soundMap = map || {};
+  for (const tile of document.querySelectorAll('#sounds .tile')) {
+    const custom = !!soundMap[tile.dataset.fxId];
+    tile.classList.toggle('custom', custom);
+    let badge = tile.querySelector('.badge');
+    if (custom && !badge) { badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = '🎵 yours'; tile.appendChild(badge); }
+    if (!custom && badge) badge.remove();
+  }
+}
 
 for (const e of EMOJIS) {
   const b = document.createElement('button');
@@ -358,6 +375,22 @@ function openSheet(m) {
     add('🎬 Play full screen', () => fire(media('play'), 'Video'));
   } else {
     add('🔊 Play sound', () => fire(media('play'), 'Sound'));
+    // Assign this real sound to a soundboard button (replaces the built-in one).
+    const wrap = document.createElement('div');
+    wrap.className = 'sheet-sound';
+    wrap.innerHTML = '<label>Use this as a soundboard button</label>';
+    const sel = document.createElement('select');
+    sel.innerHTML = '<option value="">— choose a button —</option>'
+      + SOUNDS.map(([id, icon, name]) => `<option value="${id}">${icon} ${name}</option>`).join('')
+      + '<option value="jumpscare">😱 Jumpscare scream</option>';
+    sel.addEventListener('change', () => {
+      if (!sel.value) return;
+      Net.send({ type: 'mapSound', id: sel.value, name: m.name });
+      toast('Set ✓');
+      closeSheet();
+    });
+    wrap.appendChild(sel);
+    box.appendChild(wrap);
   }
   add('🗑️ Delete from PC', () => { if (confirm(`Delete "${m.name}" from the PC?`)) Net.send({ type: 'deleteMedia', name: m.name }); }, 'danger');
   $('sheet').hidden = false;
@@ -390,10 +423,11 @@ $('upload').addEventListener('change', (e) => {
 
 // ------------------------------------------------------------ close apps
 
-function renderApps(list) {
+function renderApps(list, error) {
   const box = $('apps');
   box.innerHTML = '';
-  if (!list.length) { box.innerHTML = '<p class="hint">No closeable apps are open right now.</p>'; return; }
+  if (error) { box.innerHTML = `<p class="hint" style="color:#fb7185">${error}</p>`; return; }
+  if (!list.length) { box.innerHTML = '<p class="hint">No closeable apps are open right now. Tap again once your friend has their game open.</p>'; return; }
   for (const a of list) {
     const b = document.createElement('button');
     b.className = 'app-item';
