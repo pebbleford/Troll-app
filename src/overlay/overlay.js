@@ -37,23 +37,29 @@ function speak(text, style) {
 
 // ------------------------------------------------------------ your own files
 
+function playFile(src) {
+  const a = new Audio(src);
+  a.volume = volume;
+  mediaAudio.add(a);
+  a.onended = a.onerror = () => mediaAudio.delete(a);
+  a.play().catch(() => mediaAudio.delete(a));
+}
+
 function playMedia(fx) {
   if (fx.kind === 'image') {
     if (fx.mode === 'show') {
       Sounds.ding();
       Visuals.showImage(fx.src);
     } else {
-      Sounds.scream();
+      // A custom jumpscare can bring its own sound; otherwise use the scream.
+      if (fx.soundSrc) playFile(fx.soundSrc);
+      else Sounds.scream();
       Visuals.jumpscare({ src: fx.src });
     }
   } else if (fx.kind === 'video') {
     Visuals.playVideo(fx.src, volume);
   } else if (fx.kind === 'audio') {
-    const a = new Audio(fx.src);
-    a.volume = volume;
-    mediaAudio.add(a);
-    a.onended = a.onerror = () => mediaAudio.delete(a);
-    a.play().catch(() => mediaAudio.delete(a));
+    playFile(fx.src);
   }
 }
 

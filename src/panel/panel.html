@@ -2,33 +2,52 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src data:; style-src 'self' 'unsafe-inline'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://*.firebaseapp.com">
   <title>Troll Remote</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
     body {
-      margin: 0; padding: 22px; background: #0f0f14; color: #f1f1f5;
+      margin: 0; padding: 20px; background: #0f0f14; color: #f1f1f5;
       font-family: "Segoe UI", -apple-system, system-ui, sans-serif; user-select: none;
     }
     h1 { font-size: 22px; margin: 0 0 4px; }
-    .sub { color: #9a9aab; margin: 0 0 18px; font-size: 14px; }
-    .qr { background: #fff; border-radius: 16px; padding: 12px; width: 220px; height: 220px; margin: 0 auto 14px; display: block; }
+    .sub { color: #9a9aab; margin: 0 0 16px; font-size: 14px; }
+    .qr { background: #fff; border-radius: 16px; padding: 12px; width: 200px; height: 200px; margin: 0 auto 12px; display: block; }
     .qr img { width: 100%; height: 100%; image-rendering: pixelated; }
-    .url { text-align: center; font-family: Consolas, ui-monospace, monospace; font-size: 14px; color: #c4b5fd; user-select: text; word-break: break-all; }
-    .code { text-align: center; margin: 10px 0 4px; color: #9a9aab; font-size: 13px; }
-    .code b { display: block; color: #fff; font-size: 26px; letter-spacing: 0.3em; margin-top: 2px; user-select: text; }
-    .status { margin: 14px 0; padding: 10px 12px; border-radius: 10px; background: #1a1a22; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+    .url { text-align: center; font-family: Consolas, ui-monospace, monospace; font-size: 13px; color: #c4b5fd; user-select: text; word-break: break-all; }
+    .code { text-align: center; margin: 8px 0 2px; color: #9a9aab; font-size: 13px; }
+    .code b { display: block; color: #fff; font-size: 24px; letter-spacing: 0.3em; margin-top: 2px; user-select: text; }
+    .other { font-size: 12px; color: #77778a; text-align: center; margin-top: 4px; }
+    .status { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #1a1a22; font-size: 14px; display: flex; gap: 8px; align-items: center; }
     .dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; flex: none; }
     .status.ok .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-    .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card { background: #16161d; border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+    .card h2 { font-size: 14px; margin: 0 0 8px; color: #cfcfe0; }
+    label.check { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+    label.check input { width: 18px; height: 18px; accent-color: #8b5cf6; }
+    .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
     button { border: 0; border-radius: 10px; padding: 11px; font: inherit; font-size: 14px; font-weight: 600; background: #24242f; color: #fff; cursor: pointer; }
     button:hover { background: #2f2f3d; }
+    button:disabled { opacity: 0.5; cursor: default; }
     button.primary { grid-column: span 2; background: #8b5cf6; }
     button.primary:hover { background: #9d74f8; }
-    .tips { margin-top: 14px; font-size: 12.5px; color: #9a9aab; line-height: 1.55; }
+    .tips { margin-top: 12px; font-size: 12.5px; color: #9a9aab; line-height: 1.55; }
     .tips kbd { background: #24242f; border-radius: 4px; padding: 1px 5px; color: #ddd; font-family: inherit; }
-    .other { font-size: 12px; color: #77778a; text-align: center; margin-top: 4px; }
+
+    /* cloud section shows different content depending on its state */
+    #cloudSection [data-when] { display: none; }
+    #cloudSection[data-state="off"]   [data-when="off"],
+    #cloudSection[data-state="out"]   [data-when="out"],
+    #cloudSection[data-state="error"] [data-when="out"],
+    #cloudSection[data-state="in"]    [data-when="in"] { display: block; }
+    #cloudForm { display: grid; gap: 8px; }
+    #cloudForm input { background: #24242f; border: 1px solid #33333f; border-radius: 8px; padding: 10px; font: inherit; color: #fff; }
+    #cloudStatus { font-size: 12.5px; color: #9a9aab; margin-top: 8px; min-height: 16px; }
+    #cloudSection[data-state="error"] #cloudStatus { color: #fb7185; }
+    #cloudSection[data-state="in"] #cloudStatus { color: #22c55e; }
+    .cloud-off { font-size: 12.5px; color: #9a9aab; line-height: 1.5; }
+    .cloud-off code { background: #24242f; padding: 1px 5px; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -39,13 +58,39 @@
   <div class="other" id="other"></div>
   <div class="code">Code<b id="code"></b></div>
   <div class="status" id="status"><span class="dot"></span><span id="statusText">Waiting for your iPad…</span></div>
+
+  <div class="card" id="cloudSection" data-state="off">
+    <h2>☁️ Use it anywhere (sign in)</h2>
+    <div data-when="off">
+      <p class="cloud-off">Right now the iPad has to be on the same Wi-Fi. To control this PC from anywhere, set up a free Firebase project and copy <code>firebase-config.example.js</code> to <code>firebase-config.js</code>. See the README for the 5-minute setup.</p>
+    </div>
+    <form id="cloudForm" data-when="out">
+      <input id="cloudEmail" type="email" placeholder="Email" autocomplete="username">
+      <input id="cloudPassword" type="password" placeholder="Password" autocomplete="current-password">
+      <button class="primary" id="cloudSignIn" type="submit" style="grid-column:auto">Sign in</button>
+    </form>
+    <div data-when="in">
+      <p class="cloud-off">✅ Signed in. Sign in with the same account on your iPad and it connects — no QR code needed, from any network.</p>
+      <button id="cloudSignOut" style="width:100%">Sign out</button>
+    </div>
+    <div id="cloudStatus"></div>
+  </div>
+
+  <div class="card">
+    <label class="check"><input type="checkbox" id="autolaunch"> Start automatically when this PC turns on</label>
+  </div>
+
   <div class="buttons">
-    <button class="primary" id="hide">🥷 Hide this window (keeps running)</button>
+    <button class="primary" id="hide">🥷 Hide to tray (keeps running)</button>
     <button id="test">🔊 Test: air horn</button>
     <button id="media">📁 Media folder</button>
     <button id="quit" style="grid-column: span 2">Quit</button>
   </div>
   <div class="tips" id="tips"></div>
+
+  <script src="../../firebase-config.js"></script>
+  <script src="../../public/firebase-relay.js"></script>
   <script src="panel.js"></script>
+  <script src="cloud.js"></script>
 </body>
 </html>

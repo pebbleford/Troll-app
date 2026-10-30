@@ -44,6 +44,11 @@
       </label>
     </div>
     <div id="pending" class="pending"></div>
+    <div class="row" id="accountRow" hidden>
+      <span class="label">Account</span>
+      <span id="accountEmail" class="account-email"></span>
+      <button class="link-btn" id="signOutBtn">Sign out</button>
+    </div>
   </section>
 
   <main>
@@ -91,6 +96,13 @@
       <div class="progress" id="progress" hidden><div></div></div>
       <div class="media" id="media"></div>
     </div>
+
+    <h2>🧨 Close apps on the PC</h2>
+    <div class="card">
+      <p class="hint">Close your friend's game or app from here — it looks like it just crashed. Only the apps they have open show up; Windows' own system stuff is protected.</p>
+      <button class="go" id="refreshApps">🔄 Show open apps</button>
+      <div class="apps" id="apps"></div>
+    </div>
   </main>
 
   <div class="sheet" id="sheet" hidden>
@@ -107,11 +119,26 @@
       <p>It's shown in the Troll Remote window on the PC.</p>
       <input id="codeInput" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABC123">
       <button class="go" type="submit">Connect</button>
+      <button class="link-btn" type="button" id="toSignIn" hidden>Use my account instead →</button>
+    </form>
+  </div>
+
+  <div class="modal" id="signInModal" hidden>
+    <form class="modal-card" id="signInForm">
+      <h3>Sign in</h3>
+      <p>Same email &amp; password you used on the PC. Works from anywhere.</p>
+      <input id="emailInput" type="email" autocomplete="username" placeholder="Email">
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password">
+      <button class="go" type="submit" id="signInBtn">Sign in</button>
+      <button class="link-btn" type="button" id="toCode">Use a code on this Wi-Fi instead →</button>
+      <div class="form-err" id="signInErr"></div>
     </form>
   </div>
 
   <div class="toast" id="toast"></div>
 
+  <script src="firebase-config.js"></script>
+  <script src="firebase-relay.js"></script>
   <script src="controller.js"></script>
 </body>
 </html>

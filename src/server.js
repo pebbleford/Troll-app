@@ -64,7 +64,7 @@ function listMedia(mediaDir) {
     .sort((a, b) => b.mtime - a.mtime);
 }
 
-function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChanged }) {
+function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChanged, onMedia, extraStatic = {} }) {
   const clients = new Set();
 
   function authed(url) {
@@ -144,6 +144,19 @@ function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChan
       return sendJson(res, 404, { error: 'Not found' });
     }
 
+    // Public extras (e.g. the Firebase web config). These aren't secret, so
+    // they're served without the code — the iPad needs them to sign in. When
+    // the file doesn't exist (cloud not set up) we serve an empty script so the
+    // iPad doesn't log a 404 for an optional feature.
+    if (Object.prototype.hasOwnProperty.call(extraStatic, p)) {
+      const file = extraStatic[p];
+      return fs.readFile(file, (err, data) => {
+        const type = STATIC_TYPES[path.extname(file)] || 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+        res.end(err ? '' : data);
+      });
+    }
+
     // Static files for the iPad remote.
     const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
     const file = path.join(publicDir, path.normalize(rel));
@@ -193,7 +206,9 @@ function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChan
   }
 
   function broadcastMedia() {
-    broadcast({ type: 'media', list: listMedia(mediaDir) });
+    const list = listMedia(mediaDir);
+    broadcast({ type: 'media', list });
+    if (onMedia) onMedia(list);
   }
 
   // Pick up files dropped straight into the media folder too.

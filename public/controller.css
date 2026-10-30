@@ -231,3 +231,30 @@ textarea, input[type="text"], .modal input {
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--scare); }
+
+/* ---------- apps / close processes ---------- */
+.apps { display: grid; gap: 8px; margin-top: 4px; }
+.apps:empty { display: none; }
+.app-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: 0; border-radius: 12px; background: var(--panel-2); padding: 12px 14px; text-align: left;
+}
+.app-item .app-x { font-size: 18px; flex: none; }
+.app-item .app-info { min-width: 0; flex: 1; }
+.app-item .app-name { font-weight: 600; font-size: 15px; }
+.app-item .app-title { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-item:active { transform: scale(0.98); }
+
+/* ---------- account / sign-in ---------- */
+.account-email { font-size: 14px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-btn {
+  border: 0; background: transparent; color: var(--accent); font-size: 15px; font-weight: 600; padding: 8px 0; cursor: pointer; text-align: center; width: 100%;
+}
+.form-err { color: #fb7185; font-size: 14px; min-height: 18px; text-align: center; }
+
+/* custom-jumpscare sound picker inside the action sheet */
+.sheet-sound { margin: 4px 0 2px; }
+.sheet-sound label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; text-align: center; }
+.sheet-sound select {
+  width: 100%; background: var(--panel-2); border: 1px solid #33333f; border-radius: 10px; padding: 11px; font: inherit; color: var(--text);
+}

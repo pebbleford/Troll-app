@@ -1,5 +1,7 @@
 node_modules/
 media/*
 !media/README.txt
+# Your private Firebase project config (copy firebase-config.example.js to make it)
+firebase-config.js
 .DS_Store
 Thumbs.db
