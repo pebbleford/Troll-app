@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Troll Remote">
+  <meta name="theme-color" content="#0f0f14">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>Troll Remote</title>
+  <link rel="stylesheet" href="controller.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+    <button class="stop" id="stopAll">⛔ STOP ALL</button>
+  </header>
+
+  <section class="controls">
+    <div class="row">
+      <span class="label">When</span>
+      <div class="chips" id="delayChips">
+        <button class="chip on" data-delay="0">Now</button>
+        <button class="chip" data-delay="3000">3s</button>
+        <button class="chip" data-delay="10000">10s</button>
+        <button class="chip" data-delay="30000">30s</button>
+        <button class="chip" data-delay="60000">1 min</button>
+        <button class="chip" data-delay="random">Random</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label">Volume</span>
+      <input type="range" id="volume" min="0" max="100" value="80">
+      <span class="vol-num" id="volumeNum">80%</span>
+    </div>
+    <div class="row">
+      <label class="toggle">
+        <input type="checkbox" id="haunt">
+        <span class="switch"></span>
+        <span><b>👻 Haunt mode</b> <small>random creepy noises &amp; sightings every 20–75 s</small></span>
+      </label>
+    </div>
+    <div id="pending" class="pending"></div>
+  </section>
+
+  <main>
+    <h2>😱 Scares</h2>
+    <div class="grid" id="scares"></div>
+
+    <h2>🔊 Sounds</h2>
+    <div class="grid" id="sounds"></div>
+
+    <h2>🗣️ Make the PC talk</h2>
+    <div class="card">
+      <textarea id="sayText" rows="2" maxlength="300" placeholder="Type what the PC should say…"></textarea>
+      <div class="chips" id="voiceChips">
+        <button class="chip on" data-voice="normal">Normal</button>
+        <button class="chip" data-voice="deep">😈 Deep</button>
+        <button class="chip" data-voice="creepy">🧟 Creepy slow</button>
+        <button class="chip" data-voice="chipmunk">🐿️ Chipmunk</button>
+        <button class="chip" data-voice="fast">⚡ Fast</button>
+      </div>
+      <div class="phrases" id="phrases"></div>
+      <button class="go" id="sayBtn">Say it</button>
+    </div>
+
+    <h2>💬 Text on screen</h2>
+    <div class="card">
+      <input type="text" id="msgText" maxlength="120" placeholder="I can see you">
+      <div class="chips" id="styleChips">
+        <button class="chip on" data-style="creepy">🩸 Creepy</button>
+        <button class="chip" data-style="big">🔠 Big meme</button>
+        <button class="chip" data-style="toast">🔔 Popup notice</button>
+      </div>
+      <button class="go" id="msgBtn">Show it</button>
+    </div>
+
+    <h2>🌧️ Emoji rain</h2>
+    <div class="grid small" id="emojis"></div>
+
+    <h2>📁 Your own pictures, sounds &amp; videos</h2>
+    <div class="card">
+      <p class="hint">Upload from your iPad, or drop files into the <b>media</b> folder on the PC. Tap a file to use it.</p>
+      <label class="go upload">
+        ⬆️ Upload a file
+        <input type="file" id="upload" accept="image/*,audio/*,video/*" hidden>
+      </label>
+      <div class="progress" id="progress" hidden><div></div></div>
+      <div class="media" id="media"></div>
+    </div>
+  </main>
+
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-card">
+      <div class="sheet-title" id="sheetTitle"></div>
+      <div id="sheetButtons"></div>
+      <button class="sheet-btn cancel" data-close>Cancel</button>
+    </div>
+  </div>
+
+  <div class="modal" id="codeModal" hidden>
+    <form class="modal-card" id="codeForm">
+      <h3>Enter the code</h3>
+      <p>It's shown in the Troll Remote window on the PC.</p>
+      <input id="codeInput" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABC123">
+      <button class="go" type="submit">Connect</button>
+    </form>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="controller.js"></script>
+</body>
+</html>

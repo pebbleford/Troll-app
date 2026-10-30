@@ -1,0 +1,107 @@
+// Receives effects from the main process and plays them.
+
+let volume = 0.8;
+const mediaAudio = new Set();
+
+// ------------------------------------------------------------ text to speech
+
+const VOICE_STYLES = {
+  normal: { pitch: 1, rate: 1 },
+  deep: { pitch: 0.1, rate: 0.8 },
+  chipmunk: { pitch: 2, rate: 1.35 },
+  creepy: { pitch: 0.4, rate: 0.6 },
+  fast: { pitch: 1.1, rate: 2 },
+};
+
+let voices = [];
+const loadVoices = () => { voices = speechSynthesis.getVoices(); };
+loadVoices();
+speechSynthesis.addEventListener('voiceschanged', loadVoices);
+
+function speak(text, style) {
+  text = String(text || '').trim();
+  if (!text) return;
+  const v = VOICE_STYLES[style] || VOICE_STYLES.normal;
+  if (!voices.length) {
+    // No browser voices (happens on some PCs): use the system voice instead.
+    window.troll.speakNative(text, v.rate);
+    return;
+  }
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = voices.find((x) => x.default && /^en/i.test(x.lang)) || voices.find((x) => /^en/i.test(x.lang)) || voices[0];
+  u.pitch = v.pitch;
+  u.rate = v.rate;
+  u.volume = volume;
+  speechSynthesis.speak(u);
+}
+
+// ------------------------------------------------------------ your own files
+
+function playMedia(fx) {
+  if (fx.kind === 'image') {
+    if (fx.mode === 'show') {
+      Sounds.ding();
+      Visuals.showImage(fx.src);
+    } else {
+      Sounds.scream();
+      Visuals.jumpscare({ src: fx.src });
+    }
+  } else if (fx.kind === 'video') {
+    Visuals.playVideo(fx.src, volume);
+  } else if (fx.kind === 'audio') {
+    const a = new Audio(fx.src);
+    a.volume = volume;
+    mediaAudio.add(a);
+    a.onended = a.onerror = () => mediaAudio.delete(a);
+    a.play().catch(() => mediaAudio.delete(a));
+  }
+}
+
+// ------------------------------------------------------------ dispatcher
+
+function stopAll() {
+  Sounds.stopAll();
+  Visuals.stopAll();
+  speechSynthesis.cancel();
+  for (const a of mediaAudio) a.pause();
+  mediaAudio.clear();
+}
+
+const FX = {
+  jumpscare: () => { Sounds.scream(); Visuals.jumpscare(); },
+  flashbang: () => { Sounds.flashbang(); Visuals.flashbang(); },
+  crash: () => Visuals.crash(),
+  crack: () => { Sounds.glass(); Visuals.crack(); },
+  spiders: () => Visuals.spiders(),
+  ghost: () => { Sounds.ghost(); Visuals.ghost(); },
+  eyes: () => { Sounds.growl(); Visuals.eyes(); },
+  blackout: () => Visuals.blackout(false, Sounds.zap),
+  flicker: () => Visuals.blackout(true, Sounds.zap),
+  glitch: () => { Sounds.staticNoise(1.7); Visuals.glitch(); },
+  emojiRain: (fx) => Visuals.emojiRain(fx.emoji),
+  message: (fx) => {
+    if (fx.style === 'toast') Sounds.ding();
+    Visuals.message(fx.text, fx.style);
+  },
+  say: (fx) => speak(fx.text, fx.voice),
+  media: playMedia,
+  stop: stopAll,
+  volume: (fx) => {
+    volume = Math.max(0, Math.min(1, Number(fx.value) || 0));
+    Sounds.setVolume(volume);
+  },
+};
+for (const name of ['scream', 'airhorn', 'fart', 'knock', 'footsteps', 'whispers', 'mosquito', 'heartbeat', 'phone',
+  'doorbell', 'ding', 'siren', 'explosion', 'drone', 'static', 'glass']) {
+  FX[name] = () => Sounds[name]();
+}
+
+function run(fx) {
+  const handler = fx && FX[fx.id];
+  if (!handler) return;
+  try { handler(fx); } catch (err) { console.error('Effect failed:', fx.id, err); }
+}
+
+if (window.troll) window.troll.onFx(run);
+// Handy for testing in a normal browser: run({ id: 'jumpscare' })
+window.run = run;

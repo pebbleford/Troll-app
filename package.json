@@ -1,0 +1,17 @@
+{
+  "name": "troll-app",
+  "version": "1.0.0",
+  "description": "Prank your friend on your PC from your iPad: jumpscares, sounds, text-to-speech and more.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0"
+  }
+}
