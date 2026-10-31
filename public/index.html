@@ -7,16 +7,25 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Troll Remote">
-  <meta name="theme-color" content="#0f0f14">
+  <meta name="theme-color" content="#0b0b11">
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="manifest.json">
   <title>Troll Remote</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="controller.css">
 </head>
 <body>
   <header class="bar">
-    <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
-    <button class="stop" id="stopAll">⛔ STOP ALL</button>
+    <div class="brand">
+      <span class="brand-logo">😈</span>
+      <div class="brand-text">
+        <div class="brand-name">Troll Remote</div>
+        <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+      </div>
+    </div>
+    <button class="stop" id="stopAll"><span class="stop-ico">⏹</span> STOP</button>
   </header>
 
   <section class="controls">
