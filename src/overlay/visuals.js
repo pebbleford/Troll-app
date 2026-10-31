@@ -419,8 +419,8 @@ const Visuals = (() => {
           <div class="crash-foot">
             <div class="crash-qr"></div>
             <div>
-              <p class="crash-small">For more information about this issue and possible fixes, ask the person behind you.</p>
-              <p class="crash-small">If you call a support person, give them this info:<br>Stop code: CRITICAL_SKILL_ISSUE</p>
+              <p class="crash-small">For more information about this issue and possible fixes, visit https://www.windows.com/stopcode</p>
+              <p class="crash-small">If you call a support person, give them this info:<br>Stop code: CRITICAL_PROCESS_DIED</p>
             </div>
           </div>
         </div>`;
@@ -431,11 +431,18 @@ const Visuals = (() => {
         value = Math.min(100, value + Math.floor(rand(3, 18)));
         pct.textContent = value;
         if (value < 100) s.after(rand(300, 1100), step);
-        else s.after(900, reveal);
+        else s.after(1200, restart);
       };
-      const reveal = () => {
-        screenEl.innerHTML = '<div class="crash-gotcha">gotcha 😈</div>';
-        s.after(1800, s.end);
+      // After "collecting error info", it looks like Windows reboots: a black
+      // screen with the spinning dots, then it fades back to the game.
+      const restart = () => {
+        screenEl.className = 'layer win-restart';
+        screenEl.innerHTML = '<div class="win-spinner"><i></i><i></i><i></i><i></i><i></i></div><div class="win-text">Restarting</div>';
+        s.after(14000, () => {
+          screenEl.style.transition = 'opacity 1.2s';
+          screenEl.style.opacity = '0';
+          s.after(1200, s.end);
+        });
       };
       s.after(1200, step);
     });

@@ -67,12 +67,38 @@ html, body {
   line-height: 1.5;
   margin: 0 0 1.5vh;
 }
-.crash-gotcha {
-  width: 100%;
-  text-align: center;
-  font-size: 9vw;
-  font-weight: 700;
+/* fake Windows restart screen (shown after the blue screen "reboots") */
+.win-restart {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3vh;
+  color: #fff;
+  font-family: "Segoe UI", system-ui, sans-serif;
 }
+.win-text { font-size: 1.9vw; font-weight: 400; }
+.win-spinner { position: relative; width: 5vw; height: 5vw; }
+.win-spinner i {
+  position: absolute;
+  inset: 0;
+  animation: winspin 1.6s cubic-bezier(0.66, 0.02, 0.34, 0.98) infinite;
+}
+.win-spinner i::before {
+  content: "";
+  display: block;
+  width: 0.55vw;
+  height: 0.55vw;
+  border-radius: 50%;
+  background: #fff;
+  margin: 0 auto;
+}
+.win-spinner i:nth-child(2) { animation-delay: 0.14s; }
+.win-spinner i:nth-child(3) { animation-delay: 0.28s; }
+.win-spinner i:nth-child(4) { animation-delay: 0.42s; }
+.win-spinner i:nth-child(5) { animation-delay: 0.56s; }
+@keyframes winspin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
 
 /* ---------- eyes ---------- */
 .eye-pair {
