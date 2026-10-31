@@ -16,7 +16,7 @@ const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
 const QRCode = require('qrcode');
 const selfsigned = require('selfsigned');
-const { startServer, mediaKind } = require('./server');
+const { startServer, mediaKind, safeName } = require('./server');
 const { createDirector } = require('./director');
 const processes = require('./processes');
 const updater = require('./updater');
@@ -276,6 +276,7 @@ function createPanel() {
     icon: ICON_PATH,
     backgroundColor: '#0f0f14',
     autoHideMenuBar: true,
+    skipTaskbar: true, // live in the tray, not the taskbar
     webPreferences: {
       preload: path.join(__dirname, 'preload-panel.js'),
       // The panel renderer also runs the optional Firebase cloud relay, so it
@@ -497,7 +498,7 @@ async function handleMessage(msg, reply) {
     // --- live mic (WebRTC signalling relayed to the overlay) ---
     case 'rtcOffer':
       micRtcReply = reply;
-      if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay:rtc-in', { type: 'offer', sdp: msg.sdp, device: config.micDevice || '' });
+      if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay:rtc-in', { type: 'offer', sdp: msg.sdp, device: config.micDevice || '', deviceLabel: config.micDeviceLabel || '' });
       break;
     case 'rtcIce':
       if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay:rtc-in', { type: 'ice', candidate: msg.candidate });
@@ -553,14 +554,14 @@ async function handleMessage(msg, reply) {
       if (!text) return reply({ type: 'error', text: 'Type a message first.' });
       const wav = await renderTts(text);
       if (!wav) return reply({ type: 'error', text: "Couldn't make the voice on the PC." });
-      director.trigger({ id: 'micAudio', src: ttsUrl(wav), voice: typeof msg.voice === 'string' ? msg.voice.slice(0, 20) : 'normal', device: config.micDevice, label: 'mic message' }, msg.delay, 'mic message');
+      director.trigger({ id: 'micAudio', src: ttsUrl(wav), voice: typeof msg.voice === 'string' ? msg.voice.slice(0, 20) : 'normal', device: config.micDevice, deviceLabel: config.micDeviceLabel || '', label: 'mic message' }, msg.delay, 'mic message');
       break;
     }
     case 'micPlay': {
       if (!config.micDevice) return reply({ type: 'error', text: 'Set up the mic first on the PC: install a virtual audio cable and pick it in the Troll Remote window.' });
       const name = path.basename(String(msg.name || ''));
       if (mediaKind(name) !== 'audio' || !fs.existsSync(path.join(MEDIA_DIR, name))) return reply({ type: 'error', text: 'That sound is gone.' });
-      director.trigger({ id: 'micAudio', src: mediaProtoUrl(name), voice: 'normal', device: config.micDevice, label: name }, msg.delay, name);
+      director.trigger({ id: 'micAudio', src: mediaProtoUrl(name), voice: 'normal', device: config.micDevice, deviceLabel: config.micDeviceLabel || '', label: name }, msg.delay, name);
       break;
     }
     case 'mapSound': {
@@ -652,8 +653,9 @@ if (!app.requestSingleInstanceLock()) {
     // Allow the overlay to see audio output device labels (needed to route mic
     // trolls to the virtual cable). Only "media" is granted.
     try {
-      session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === 'media'));
-      session.defaultSession.setPermissionCheckHandler((_wc, perm) => perm === 'media');
+      const allow = (perm) => perm === 'media' || perm === 'speaker-selection';
+      session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(allow(perm)));
+      session.defaultSession.setPermissionCheckHandler((_wc, perm) => allow(perm));
     } catch { /* ignore */ }
 
     director = createDirector({
@@ -699,6 +701,24 @@ if (!app.requestSingleInstanceLock()) {
     });
     // The overlay's WebRTC answer/ICE goes back to the streaming iPad.
     ipcMain.on('overlay:rtc-out', (_e, m) => { if (micRtcReply) micRtcReply(m); });
+
+    // A file uploaded over the cloud (reassembled in the panel renderer) is
+    // written to the media folder here.
+    ipcMain.handle('cloud:save-upload', (_e, { name, dataBase64 }) => {
+      try {
+        const clean = safeName(name);
+        if (!mediaKind(clean)) return { ok: false, error: 'unsupported file type' };
+        const buf = Buffer.from(String(dataBase64 || ''), 'base64');
+        if (!buf.length || buf.length > 25 * 1024 * 1024) return { ok: false, error: 'bad size' };
+        let finalName = clean;
+        const ext = path.extname(clean);
+        const stem = path.basename(clean, ext);
+        for (let i = 2; fs.existsSync(path.join(MEDIA_DIR, finalName)); i++) finalName = `${stem} ${i}${ext}`;
+        fs.writeFileSync(path.join(MEDIA_DIR, finalName), buf);
+        server.broadcastMedia();
+        return { ok: true, name: finalName };
+      } catch (e) { return { ok: false, error: e.message }; }
+    });
     ipcMain.handle('panel:info', () => connectionInfo());
     ipcMain.on('panel:hide', () => hideToTray());
     ipcMain.on('panel:test', (_e, id) => director.trigger({ id: FX_IDS.has(id) ? id : 'jumpscare' }, 0));

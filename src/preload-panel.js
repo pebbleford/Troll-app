@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld('cloudBridge', {
   lanPresence: () => ipcRenderer.invoke('cloud:lan-presence'),
   sendCommand: (msg) => ipcRenderer.send('cloud:command', msg),
   onPush: (cb) => ipcRenderer.on('cloud:push', (_e, obj) => cb(obj)),
+  saveUpload: (obj) => ipcRenderer.invoke('cloud:save-upload', obj),
 });

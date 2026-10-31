@@ -263,4 +263,4 @@ function startServer({ port, httpsPort, tls, code, publicDir, mediaDir, onMessag
   })();
 }
 
-module.exports = { startServer, listMedia, mediaKind };
+module.exports = { startServer, listMedia, mediaKind, safeName };

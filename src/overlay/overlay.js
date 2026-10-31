@@ -77,10 +77,21 @@ function playMedia(fx) {
 
 const MIC_RATE = { normal: 1, deep: 0.8, chipmunk: 1.45, creepy: 0.72, fast: 1.7 };
 
+// Routing audio to a specific output device only works once microphone
+// permission has been granted in this window — otherwise setSinkId silently
+// keeps using the default device (that's why "nothing came out of the mic").
+let micUnlocked = false;
+async function ensureMicPermission() {
+  if (micUnlocked) return;
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    s.getTracks().forEach((t) => t.stop());
+    micUnlocked = true;
+  } catch { /* may still work */ }
+}
+
 async function listOutputs() {
-  // Getting (then immediately dropping) mic access unlocks the device labels.
-  try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); }
-  catch { /* labels may be blank, but ids still work */ }
+  await ensureMicPermission();
   let devices = [];
   try {
     devices = (await navigator.mediaDevices.enumerateDevices())
@@ -90,15 +101,32 @@ async function listOutputs() {
   if (window.troll && window.troll.micDevices) window.troll.micDevices(devices);
 }
 
-async function playToDevice(src, device, rate, label) {
+// Device ids change between runs, so match by the stable label; fall back to id.
+// Returns '' for the system default, a device id, or null if it can't be found.
+async function resolveSink(label, idHint) {
+  if (!label || label === 'System default output') return '';
+  await ensureMicPermission();
   try {
+    const outs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput');
+    const byLabel = outs.find((d) => d.label && d.label === label);
+    if (byLabel) return byLabel.deviceId;
+    const byId = outs.find((d) => d.deviceId === idHint);
+    if (byId) return byId.deviceId;
+  } catch { /* */ }
+  return idHint || null;
+}
+
+async function playToDevice(src, { device, deviceLabel, rate, label }) {
+  try {
+    const sink = await resolveSink(deviceLabel, device);
+    if (sink === null) return reportError('Mic device not found — re-pick it in the Troll Remote window.');
     const a = new Audio(src);
     a.preservesPitch = false;
     try { a.mozPreservesPitch = false; a.webkitPreservesPitch = false; } catch { /* */ }
     a.playbackRate = rate || 1;
     a.volume = 1;
-    if (device && a.setSinkId) {
-      try { await a.setSinkId(device); }
+    if (sink && a.setSinkId) {
+      try { await a.setSinkId(sink); }
       catch (e) { return reportError(`Mic device not available (${e.message}). Re-pick it in the PC window.`); }
     }
     mediaAudio.add(a);
@@ -131,9 +159,12 @@ async function rtcHandle(m) {
         micRtcEl = new Audio();
         micRtcEl.srcObject = e.streams[0];
         micRtcEl.autoplay = true;
-        const play = () => micRtcEl.play().catch((err) => reportError('Live mic playback failed: ' + err.message));
-        if (m.device && micRtcEl.setSinkId) micRtcEl.setSinkId(m.device).then(play, (err) => reportError(`Mic device not available (${err.message}).`));
-        else play();
+        (async () => {
+          const sink = await resolveSink(m.deviceLabel, m.device);
+          const play = () => micRtcEl.play().catch((err) => reportError('Live mic playback failed: ' + err.message));
+          if (sink && micRtcEl.setSinkId) micRtcEl.setSinkId(sink).then(play, (err) => reportError(`Mic device not available (${err.message}).`));
+          else play();
+        })();
       };
       await micPc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
       const answer = await micPc.createAnswer();
@@ -175,7 +206,7 @@ const FX = {
   },
   say: (fx) => speak(fx.text, fx.voice),
   media: playMedia,
-  micAudio: (fx) => playToDevice(fx.src, fx.device, MIC_RATE[fx.voice] || 1, fx.label),
+  micAudio: (fx) => playToDevice(fx.src, { device: fx.device, deviceLabel: fx.deviceLabel, rate: MIC_RATE[fx.voice] || 1, label: fx.label }),
   stop: stopAll,
   volume: (fx) => {
     volume = Math.max(0, Math.min(1, Number(fx.value) || 0));

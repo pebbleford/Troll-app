@@ -499,7 +499,12 @@ $('upload').addEventListener('change', (e) => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  if (!Net.canUpload()) return toast('Uploading needs the same Wi-Fi as the PC', true);
+  if (Net.canUpload()) return lanUpload(file);
+  if (TrollCloud.isConfigured() && TrollCloud.uid) return cloudUpload(file);
+  toast('Uploading needs the same Wi-Fi, or sign-in', true);
+});
+
+function lanUpload(file) {
   const xhr = new XMLHttpRequest();
   const bar = $('progress');
   bar.hidden = false;
@@ -515,7 +520,36 @@ $('upload').addEventListener('change', (e) => {
   xhr.onerror = () => { bar.hidden = true; toast('Upload failed', true); };
   xhr.open('POST', `${Net.lanBase}/api/upload?code=${encodeURIComponent(Net.code)}&name=${encodeURIComponent(file.name)}`);
   xhr.send(file);
-});
+}
+
+function b64(buf) {
+  let s = ''; const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+async function cloudUpload(file) {
+  if (file.size > 20 * 1024 * 1024) return toast('Too big for cloud upload (20 MB max)', true);
+  const bar = $('progress');
+  bar.hidden = false;
+  bar.firstElementChild.style.width = '0%';
+  try {
+    const data = b64(await file.arrayBuffer());
+    const CH = 600 * 1024;
+    const chunks = Math.ceil(data.length / CH);
+    const uploadId = 'u' + Date.now() + Math.random().toString(36).slice(2, 8);
+    for (let i = 0; i < chunks; i++) {
+      await TrollCloud.putChunk(uploadId, i, data.slice(i * CH, (i + 1) * CH));
+      bar.firstElementChild.style.width = `${Math.round(((i + 1) / chunks) * 100)}%`;
+    }
+    Net.send({ type: 'cloudUpload', uploadId, name: file.name, chunks });
+    toast('Uploaded via cloud — it will appear shortly');
+  } catch (err) {
+    toast('Cloud upload failed: ' + err.message, true);
+  } finally {
+    bar.hidden = true;
+  }
+}
 
 // ------------------------------------------------------------ close apps
 

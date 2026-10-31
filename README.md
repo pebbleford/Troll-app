@@ -24,6 +24,12 @@ the PC talking to them out loud.
    with the checkbox in the window, or in the tray menu.)
 7. Click **Hide to tray**. The app keeps running in the little icon at the
    bottom-right (the system tray) — click that icon any time to open it again.
+   It doesn't show up in the taskbar, only the tray.
+
+**No black console window:** after the first run, launch it with
+**`start-hidden.vbs`** (double-click) instead of `start.bat` — it starts the app
+with no CMD window at all. (Use `start.bat` the first time so you can see it
+install, and later if you ever need to see error messages.)
 
 Mac/Linux: run `./start.sh` instead.
 
@@ -84,6 +90,12 @@ the real mic directly, so this uses a free **virtual audio cable**:
    pick **CABLE Input (VB-Audio Virtual Cable)**.
 3. In the game / Discord, set the **microphone/input** to **CABLE Output
    (VB-Audio Virtual Cable)**.
+
+> Important: for the troll to reach the game, pick the **CABLE Input** device in
+> step 2 — not "System default output" (that plays to your speakers, which is only
+> useful for testing). The app automatically grabs microphone permission the first
+> time so Windows actually routes the audio to the cable; if you ever picked a
+> device and later heard nothing, re-open the picker and choose the cable again.
 
 Now on the iPad, under **🎤 Talk through the mic**, type a message (or tap a
 preset), pick a voice, and **Send through mic** — it goes out on their voice chat.
@@ -167,9 +179,9 @@ cloud is only for controlling the PC when you're **away** from its network.
 > own Google account, so it's not something that can be set up on your behalf. The
 > steps above are the whole thing (~5 min, free). The cloud relay code is wired up
 > but, unlike the local Wi-Fi mode, it couldn't be tested against a live project
-> from the build machine, so try it at home once. Uploading new files and photo
-> thumbnails still need the same Wi-Fi; firing effects, talking, and closing apps
-> all work over the cloud.
+> from the build machine, so try it at home once. Firing effects, talking,
+> closing apps and **uploading files (up to 20 MB) all work over the cloud** now;
+> only the photo thumbnails in the file list need the same Wi-Fi.
 
 ## Keeping it updated
 
@@ -206,8 +218,8 @@ for adding it to your Home Screen.
    from anywhere.
 
 If you're on the same Wi-Fi as the PC, you don't need any of this — just use the
-QR code / local address as usual (that's the only way LAN uploads and photo
-thumbnails work).
+QR code / local address as usual. (Uploads work over the cloud too, up to 20 MB;
+only photo thumbnails in the file list need the same Wi-Fi.)
 
 ## Good to know
 

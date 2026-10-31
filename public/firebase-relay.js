@@ -82,5 +82,24 @@ window.TrollCloud = (() => {
     }, (e) => console.warn('cloud commands', e.message));
   }
 
-  return { isConfigured, init, onUser, signIn, signOut, writeDoc, watchDoc, sendCommand, watchCommands, get uid() { return uid; } };
+  // ---- chunked file upload (iPad writes chunks, PC reads them) ----
+  // Firestore docs cap at ~1 MB, so a file is base64'd and split into pieces.
+
+  const chunkRef = (uploadId, i) => sdk.doc(db, 'users', uid, 'uploads', uploadId, 'chunks', String(i));
+
+  async function putChunk(uploadId, i, data) {
+    await sdk.setDoc(chunkRef(uploadId, i), { data });
+  }
+  async function getChunk(uploadId, i) {
+    const s = await sdk.getDoc(chunkRef(uploadId, i));
+    return s.exists() ? s.data().data : null;
+  }
+  async function deleteUpload(uploadId, count) {
+    for (let i = 0; i < count; i++) { try { await sdk.deleteDoc(chunkRef(uploadId, i)); } catch { /* */ } }
+  }
+
+  return {
+    isConfigured, init, onUser, signIn, signOut, writeDoc, watchDoc, sendCommand, watchCommands,
+    putChunk, getChunk, deleteUpload, get uid() { return uid; },
+  };
 })();

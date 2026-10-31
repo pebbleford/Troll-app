@@ -68,7 +68,24 @@
     if (lastMedia) cloud.writeDoc('media', lastMedia);
     // Commands from the iPad -> run them on this PC.
     if (unsubCommands) unsubCommands();
-    unsubCommands = cloud.watchCommands((msg) => bridge.sendCommand(msg));
+    unsubCommands = cloud.watchCommands((msg) => {
+      if (msg && msg.type === 'cloudUpload') return handleCloudUpload(msg);
+      bridge.sendCommand(msg);
+    });
+  }
+
+  // Reassemble a file the iPad uploaded in chunks, hand it to the PC to save.
+  async function handleCloudUpload(msg) {
+    try {
+      const parts = [];
+      for (let i = 0; i < msg.chunks; i++) {
+        const d = await cloud.getChunk(msg.uploadId, i);
+        if (d == null) throw new Error('missing chunk ' + i);
+        parts.push(d);
+      }
+      await bridge.saveUpload({ name: msg.name, dataBase64: parts.join('') });
+      cloud.deleteUpload(msg.uploadId, msg.chunks);
+    } catch (e) { console.warn('cloud upload failed:', e.message); }
   }
 
   function onSignedOut() {
