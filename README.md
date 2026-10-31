@@ -89,9 +89,21 @@ Now on the iPad, under **🎤 Talk through the mic**, type a message (or tap a
 preset), pick a voice, and **Send through mic** — it goes out on their voice chat.
 You can also tap any uploaded sound → **Play through the mic**.
 
+**Talk live with your own voice** (hold-to-talk): in the same section, press and
+hold **🎙️ Hold to talk live** and speak — your iPad's microphone streams straight
+out of the PC's mic in real time. The first time, the iPad switches to the PC's
+secure (https) address so Safari will let it use your microphone:
+
+- Tap through Safari's certificate warning once (**Show details → visit this
+  website**) — it's your own PC, it just uses a self-signed certificate.
+- Allow microphone access when asked, then hold the button and talk.
+- Same Wi-Fi only (it's a direct connection to the PC).
+
 > Tip: to hear the voice chat yourself too, Windows → Sound settings → the CABLE
 > Output device → **Listen to this device**. And remember to switch the game's mic
-> back to your real one afterwards.
+> back to your real one afterwards. There's also a **System default output** option
+> in the device picker if you want to test the mic trolls through your speakers
+> first.
 
 ### Close their game from the iPad
 

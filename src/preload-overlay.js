@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('troll', {
   report: (text) => ipcRenderer.send('overlay:report', text),
   onEnumerateMic: (cb) => ipcRenderer.on('overlay:enumerate-mic', () => cb()),
   micDevices: (list) => ipcRenderer.send('overlay:mic-devices', list),
+  onRtc: (cb) => ipcRenderer.on('overlay:rtc-in', (_e, m) => cb(m)),
+  sendRtc: (m) => ipcRenderer.send('overlay:rtc-out', m),
 });

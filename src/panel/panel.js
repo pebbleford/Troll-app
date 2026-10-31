@@ -40,6 +40,7 @@ $('micChoose').onclick = async () => {
   const { devices, selected } = await panel.micDevices();
   const sel = $('micDevice');
   sel.innerHTML = '<option value="">— none (mic trolls off) —</option>'
+    + '<option value="default">System default output</option>'
     + devices.map((d) => `<option value="${esc(d.deviceId)}">${esc(d.label)}</option>`).join('');
   sel.value = selected || '';
   sel.hidden = false;

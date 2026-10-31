@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { pathToFileURL } = require('url');
 const QRCode = require('qrcode');
+const selfsigned = require('selfsigned');
 const { startServer, mediaKind } = require('./server');
 const { createDirector } = require('./director');
 const processes = require('./processes');
@@ -63,6 +64,7 @@ let config = null;
 let clientCount = 0;
 let quitting = false;
 let balloonShown = false;
+let micRtcReply = null; // how to answer the iPad that's streaming its mic
 
 // ---------------------------------------------------------------- config
 
@@ -145,6 +147,25 @@ function lanAddresses() {
   return out.sort((a, b) => (virtual.test(a.name) - virtual.test(b.name)) || (rank(a.address) - rank(b.address)));
 }
 
+// A self-signed cert so the PC can serve over HTTPS (needed for the iPad to
+// capture its microphone). Cached in userData and reused.
+async function ensureCert() {
+  const certPath = path.join(app.getPath('userData'), 'cert.json');
+  try {
+    const c = JSON.parse(fs.readFileSync(certPath, 'utf8'));
+    if (c.key && c.cert && Date.now() - (c.created || 0) < 300 * 24 * 3600 * 1000) return c;
+  } catch { /* regenerate */ }
+  const altNames = [{ type: 2, value: 'localhost' }, { type: 7, ip: '127.0.0.1' }];
+  for (const a of lanAddresses()) altNames.push({ type: 7, ip: a.address });
+  const pems = await selfsigned.generate([{ name: 'commonName', value: 'Troll Remote' }], {
+    days: 3650, keySize: 2048, algorithm: 'sha256',
+    extensions: [{ name: 'subjectAltName', altNames }],
+  });
+  const c = { key: pems.private, cert: pems.cert, created: Date.now() };
+  try { fs.writeFileSync(certPath, JSON.stringify(c)); } catch { /* */ }
+  return c;
+}
+
 function cloudConfigured() {
   try {
     const t = fs.readFileSync(FIREBASE_CONFIG, 'utf8');
@@ -160,6 +181,7 @@ async function connectionInfo() {
   return {
     code: config.code,
     port: server.port,
+    httpsPort: server.httpsPort || 0,
     url: main,
     urls,
     qr,
@@ -470,7 +492,19 @@ async function handleMessage(msg, reply) {
   if (!msg || typeof msg.type !== 'string') return;
   switch (msg.type) {
     case 'hello':
-      reply({ type: 'hello', pcName: os.hostname(), state: director.state(), media: server.listMedia(), soundMap: config.soundMap });
+      reply({ type: 'hello', pcName: os.hostname(), state: director.state(), media: server.listMedia(), soundMap: config.soundMap, httpsPort: server.httpsPort || 0, micReady: !!config.micDevice });
+      break;
+    // --- live mic (WebRTC signalling relayed to the overlay) ---
+    case 'rtcOffer':
+      micRtcReply = reply;
+      if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay:rtc-in', { type: 'offer', sdp: msg.sdp, device: config.micDevice || '' });
+      break;
+    case 'rtcIce':
+      if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay:rtc-in', { type: 'ice', candidate: msg.candidate });
+      break;
+    case 'rtcStop':
+      if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay:rtc-in', { type: 'stop' });
+      micRtcReply = null;
       break;
     case 'fx': {
       let fx = cleanFx(msg.fx);
@@ -633,9 +667,15 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
 
+    let tls = null;
+    try { const c = await ensureCert(); tls = { key: c.key, cert: c.cert }; }
+    catch (e) { console.error('Could not make the HTTPS certificate (mic over Wi-Fi disabled):', e.message); }
+
     try {
       server = await startServer({
         port: config.port || DEFAULT_PORT,
+        httpsPort: (config.port || DEFAULT_PORT) + 1,
+        tls,
         code: config.code,
         publicDir: PUBLIC_DIR,
         mediaDir: MEDIA_DIR,
@@ -657,6 +697,8 @@ if (!app.requestSingleInstanceLock()) {
       if (server) server.broadcast(msg);
       cloudPush(msg);
     });
+    // The overlay's WebRTC answer/ICE goes back to the streaming iPad.
+    ipcMain.on('overlay:rtc-out', (_e, m) => { if (micRtcReply) micRtcReply(m); });
     ipcMain.handle('panel:info', () => connectionInfo());
     ipcMain.on('panel:hide', () => hideToTray());
     ipcMain.on('panel:test', (_e, id) => director.trigger({ id: FX_IDS.has(id) ? id : 'jumpscare' }, 0));

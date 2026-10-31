@@ -108,6 +108,45 @@ async function playToDevice(src, device, rate, label) {
   } catch (e) { reportError(`Mic troll failed (${e.message}).`); }
 }
 
+// ------------------------------------------------------------ live mic (WebRTC)
+// The iPad streams its microphone here; we play it to the chosen output device
+// (the virtual cable), so it reaches a game / Discord as the PC's mic.
+
+const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+let micPc = null;
+let micRtcEl = null;
+
+function rtcStop() {
+  if (micRtcEl) { try { micRtcEl.pause(); micRtcEl.srcObject = null; } catch { /* */ } micRtcEl = null; }
+  if (micPc) { try { micPc.close(); } catch { /* */ } micPc = null; }
+}
+
+async function rtcHandle(m) {
+  try {
+    if (m.type === 'offer') {
+      rtcStop();
+      micPc = new RTCPeerConnection(RTC_CFG);
+      micPc.onicecandidate = (e) => { if (e.candidate && window.troll) window.troll.sendRtc({ type: 'rtcIce', candidate: e.candidate.toJSON() }); };
+      micPc.ontrack = (e) => {
+        micRtcEl = new Audio();
+        micRtcEl.srcObject = e.streams[0];
+        micRtcEl.autoplay = true;
+        const play = () => micRtcEl.play().catch((err) => reportError('Live mic playback failed: ' + err.message));
+        if (m.device && micRtcEl.setSinkId) micRtcEl.setSinkId(m.device).then(play, (err) => reportError(`Mic device not available (${err.message}).`));
+        else play();
+      };
+      await micPc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
+      const answer = await micPc.createAnswer();
+      await micPc.setLocalDescription(answer);
+      if (window.troll) window.troll.sendRtc({ type: 'rtcAnswer', sdp: answer.sdp });
+    } else if (m.type === 'ice') {
+      if (micPc && m.candidate) await micPc.addIceCandidate(m.candidate).catch(() => {});
+    } else if (m.type === 'stop') {
+      rtcStop();
+    }
+  } catch (e) { reportError('Live mic failed: ' + e.message); }
+}
+
 // ------------------------------------------------------------ dispatcher
 
 function stopAll() {
@@ -156,5 +195,6 @@ function run(fx) {
 
 if (window.troll) window.troll.onFx(run);
 if (window.troll && window.troll.onEnumerateMic) window.troll.onEnumerateMic(listOutputs);
+if (window.troll && window.troll.onRtc) window.troll.onRtc(rtcHandle);
 // Handy for testing in a normal browser: run({ id: 'jumpscare' })
 window.run = run;

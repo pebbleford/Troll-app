@@ -233,6 +233,18 @@ textarea::placeholder, input::placeholder { color: #6b6b7b; }
 
 .hint { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 
+.live-mic-wrap { display: grid; gap: 6px; }
+.live-mic {
+  border: 1px solid var(--line-2); border-radius: 14px; background: var(--surface-2); color: var(--text);
+  font-weight: 700; font-size: 16px; padding: 15px; width: 100%; user-select: none; -webkit-user-select: none;
+  touch-action: none; transition: transform 0.1s, background 0.15s, border-color 0.15s;
+}
+.live-mic:active { transform: scale(0.98); }
+.live-mic.on {
+  background: linear-gradient(145deg, #fb5169, #e11d48); border-color: transparent; color: #fff;
+  box-shadow: 0 6px 18px rgba(225, 29, 72, 0.4);
+}
+
 .progress { height: 7px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
 .progress div { height: 100%; width: 0; background: linear-gradient(90deg, var(--good), #34d27a); transition: width 0.2s; }
 

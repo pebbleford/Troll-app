@@ -2,6 +2,7 @@
 // relays button presses to the Electron main process.
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
@@ -64,7 +65,7 @@ function listMedia(mediaDir) {
     .sort((a, b) => b.mtime - a.mtime);
 }
 
-function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChanged, onMedia, extraStatic = {} }) {
+function startServer({ port, httpsPort, tls, code, publicDir, mediaDir, onMessage, onClientsChanged, onMedia, extraStatic = {} }) {
   const clients = new Set();
 
   function authed(url) {
@@ -124,7 +125,7 @@ function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChan
     req.pipe(out);
   }
 
-  const server = http.createServer((req, res) => {
+  const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = decodeURIComponent(url.pathname);
 
@@ -162,18 +163,25 @@ function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChan
     const file = path.join(publicDir, path.normalize(rel));
     if (!file.startsWith(publicDir)) { res.writeHead(403); return res.end(); }
     serveStatic(res, file);
-  });
+  };
+
+  const server = http.createServer(requestHandler);
+  // Optional HTTPS mirror, so the iPad can use its microphone (browsers only
+  // allow getUserMedia on a secure origin).
+  const secureServer = tls ? https.createServer(tls, requestHandler) : null;
 
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on('upgrade', (req, socket, head) => {
+  const onUpgrade = (req, socket, head) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname !== '/ws') return socket.destroy();
     wss.handleUpgrade(req, socket, head, (ws) => {
       if (!authed(url)) return ws.close(4001, 'Wrong code');
       wss.emit('connection', ws, req);
     });
-  });
+  };
+  server.on('upgrade', onUpgrade);
+  if (secureServer) secureServer.on('upgrade', onUpgrade);
 
   wss.on('connection', (ws) => {
     clients.add(ws);
@@ -220,26 +228,39 @@ function startServer({ port, code, publicDir, mediaDir, onMessage, onClientsChan
     });
   } catch { /* watching is a nice-to-have */ }
 
-  return new Promise((resolve, reject) => {
-    let attempt = 0;
-    const tryListen = () => {
-      const p = port + attempt;
-      server.once('error', (err) => {
-        if (err.code === 'EADDRINUSE' && attempt < 10) { attempt++; tryListen(); }
-        else reject(err);
-      });
-      server.listen(p, '0.0.0.0', () => {
-        resolve({
-          port: p,
-          broadcast,
-          broadcastMedia,
-          listMedia: () => listMedia(mediaDir),
-          close: () => { clearInterval(heartbeat); wss.close(); server.close(); },
-        });
-      });
+  // Listen on a free port starting at `start`, trying up to 10 above it.
+  function listen(srv, start) {
+    return new Promise((resolve, reject) => {
+      let attempt = 0;
+      const tryOne = () => {
+        const p = start + attempt;
+        const onErr = (err) => {
+          if (err.code === 'EADDRINUSE' && attempt < 10) { attempt++; tryOne(); }
+          else reject(err);
+        };
+        srv.once('error', onErr);
+        srv.listen(p, '0.0.0.0', () => { srv.removeListener('error', onErr); resolve(p); });
+      };
+      tryOne();
+    });
+  }
+
+  return (async () => {
+    const boundPort = await listen(server, port);
+    let boundHttps = 0;
+    if (secureServer) {
+      try { boundHttps = await listen(secureServer, httpsPort || boundPort + 1); }
+      catch (e) { console.error('HTTPS server failed to start (mic over Wi-Fi disabled):', e.message); }
+    }
+    return {
+      port: boundPort,
+      httpsPort: boundHttps,
+      broadcast,
+      broadcastMedia,
+      listMedia: () => listMedia(mediaDir),
+      close: () => { clearInterval(heartbeat); wss.close(); server.close(); if (secureServer) secureServer.close(); },
     };
-    tryListen();
-  });
+  })();
 }
 
 module.exports = { startServer, listMedia, mediaKind };

@@ -63,6 +63,7 @@ const Net = {
   active: null,      // 'lan' | 'cloud' | null
   ws: null,
   lanBase: null,     // e.g. http://192.168.1.5:4545 — also used for media urls/upload
+  httpsPort: 0,      // the PC's https port, for live mic
   code: '',          // LAN auth code
   cloudSubs: [],     // firestore unsubscribers (receivers)
   presSub: null,     // presence watcher
@@ -87,6 +88,13 @@ function handleIncoming(msg) {
       applyState(msg.state || {});
       renderMedia(msg.media || []);
       setSoundMap(msg.soundMap || {});
+      if (msg.httpsPort) Net.httpsPort = msg.httpsPort;
+      break;
+    case 'rtcAnswer':
+      if (liveMicPc) liveMicPc.setRemoteDescription({ type: 'answer', sdp: msg.sdp }).catch(() => {});
+      break;
+    case 'rtcIce':
+      if (liveMicPc && msg.candidate) liveMicPc.addIceCandidate(msg.candidate).catch(() => {});
       break;
     case 'state': applyState(msg.state || {}); break;
     case 'media': renderMedia(msg.list || []); break;
@@ -288,6 +296,72 @@ function micSend(text) {
   if (Net.send({ type: 'micSay', text, voice: micVoice, delay })) toast(`🎤 "${text}"${delayLabel() || ''}`);
 }
 $('micBtn').addEventListener('click', () => micSend($('micText').value));
+
+// ---- live mic (hold-to-talk): stream the iPad's mic to the PC's mic ----
+
+const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+let liveMicPc = null;
+let liveMicStream = null;
+
+function setLiveMicUi(on) {
+  const b = $('liveMicBtn');
+  b.classList.toggle('on', on);
+  b.textContent = on ? '🔴 Talking… (release to stop)' : '🎙️ Hold to talk live';
+}
+
+async function startLiveMic() {
+  if (liveMicPc) return;
+  if (Net.active !== 'lan') return toast('Live mic needs the same Wi-Fi as the PC', true);
+  // The iPad can only use its mic on a secure (https) page.
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (Net.httpsPort) {
+      const code = encodeURIComponent(localStorage.getItem('trollCode') || '');
+      toast('Opening the secure page — accept the certificate, then hold again');
+      setTimeout(() => { location.href = `https://${location.hostname}:${Net.httpsPort}/?code=${code}`; }, 900);
+    } else {
+      toast('Live mic needs HTTPS, which isn\'t available here', true);
+    }
+    return;
+  }
+  try {
+    liveMicStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch {
+    return toast('Allow microphone access to talk live', true);
+  }
+  try {
+    liveMicPc = new RTCPeerConnection(RTC_CFG);
+    liveMicStream.getTracks().forEach((t) => liveMicPc.addTrack(t, liveMicStream));
+    liveMicPc.onicecandidate = (e) => { if (e.candidate) Net.send({ type: 'rtcIce', candidate: e.candidate.toJSON() }); };
+    const offer = await liveMicPc.createOffer();
+    await liveMicPc.setLocalDescription(offer);
+    Net.send({ type: 'rtcOffer', sdp: offer.sdp });
+    setLiveMicUi(true);
+  } catch (e) {
+    stopLiveMic();
+    toast('Live mic failed: ' + e.message, true);
+  }
+}
+
+function stopLiveMic() {
+  if (!liveMicPc && !liveMicStream) return;
+  Net.send({ type: 'rtcStop' });
+  if (liveMicStream) liveMicStream.getTracks().forEach((t) => t.stop());
+  if (liveMicPc) { try { liveMicPc.close(); } catch { /* */ } }
+  liveMicPc = null;
+  liveMicStream = null;
+  setLiveMicUi(false);
+}
+
+(() => {
+  const b = $('liveMicBtn');
+  const down = (e) => { e.preventDefault(); startLiveMic(); };
+  const up = (e) => { e.preventDefault(); stopLiveMic(); };
+  b.addEventListener('pointerdown', down);
+  b.addEventListener('pointerup', up);
+  b.addEventListener('pointercancel', up);
+  b.addEventListener('pointerleave', up);
+  b.addEventListener('contextmenu', (e) => e.preventDefault());
+})();
 
 $('sayBtn').addEventListener('click', () => {
   const text = $('sayText').value.trim();
@@ -526,9 +600,15 @@ function showInfo(title, text) {
   $('infoModal').hidden = false;
 }
 
-// When this page is served over https (e.g. hosted on GitHub Pages) it can't
-// reach the PC's local ws:// address, so it must use the cloud (sign-in).
-const HOSTED = location.protocol === 'https:';
+// A page served from a public host over https (e.g. GitHub Pages) can't reach
+// the PC's local network, so it must use the cloud. But the PC's OWN https page
+// (served on a LAN address, for the live mic) can still talk to it directly.
+function isLanHost(h) {
+  // The PC is always reached by an IP address (from the QR) or localhost;
+  // a hosted page (GitHub Pages) is reached by a domain name.
+  return h === 'localhost' || h.endsWith('.local') || /^\d{1,3}(\.\d{1,3}){3}$/.test(h);
+}
+const HOSTED = location.protocol === 'https:' && !isLanHost(location.hostname);
 
 async function decideEntry(forceChoose) {
   const savedCode = (localStorage.getItem('trollCode') || '').toUpperCase();
