@@ -7,7 +7,7 @@
 //  - Optionally, when you add a Firebase project, the panel window also relays
 //    commands through the cloud so the iPad works from anywhere (see cloud.js).
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage, shell, dialog, Notification } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage, shell, dialog, Notification, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -18,9 +18,19 @@ const QRCode = require('qrcode');
 const { startServer, mediaKind } = require('./server');
 const { createDirector } = require('./director');
 const processes = require('./processes');
+const updater = require('./updater');
+const pkg = require('../package.json');
 
 // Let the overlay play sound without anyone clicking on it first.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+// Serve the user's media over a custom scheme instead of file://. Some Windows
+// setups reject file:// URLs inside <audio>/<video> ("media load rejected by
+// URL safety check"), which stopped uploaded mp3s/videos from playing; a
+// privileged scheme avoids that entirely.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'troll', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, bypassCSP: false } },
+]);
 
 const ROOT = path.join(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -309,6 +319,12 @@ function buildTrayMenu() {
       checked: !!config.openAtLogin,
       click: (item) => { config.openAtLogin = item.checked; saveConfig(); applyAutoLaunch(); },
     },
+    {
+      label: 'Update automatically on start',
+      type: 'checkbox',
+      checked: config.autoUpdate !== false,
+      click: (item) => { config.autoUpdate = item.checked; saveConfig(); },
+    },
     { label: 'Open media folder', click: () => shell.openPath(MEDIA_DIR) },
     { type: 'separator' },
     { label: 'Quit Troll Remote', click: () => app.quit() },
@@ -327,6 +343,7 @@ function createTray() {
   refreshTray();
   tray.on('click', () => togglePanel(true));
   tray.on('double-click', () => togglePanel(true));
+  tray.on('balloon-click', () => { if (pendingDownloadUrl) shell.openExternal(pendingDownloadUrl); });
   screen.on('display-added', refreshTray);
   screen.on('display-removed', () => { refreshTray(); fitOverlay(); });
   screen.on('display-metrics-changed', fitOverlay);
@@ -371,16 +388,20 @@ function cleanFx(fx) {
     if (!kind || !fs.existsSync(file)) return null;
     out.name = name;
     out.kind = kind;
-    out.src = pathToFileURL(file).href;
+    out.src = mediaProtoUrl(name);
     // A custom image jumpscare can use one of your uploaded sounds instead of
     // the built-in scream.
     if (kind === 'image' && typeof fx.sound === 'string' && fx.sound) {
       const sName = path.basename(fx.sound);
       const sFile = path.join(MEDIA_DIR, sName);
-      if (mediaKind(sName) === 'audio' && fs.existsSync(sFile)) out.soundSrc = pathToFileURL(sFile).href;
+      if (mediaKind(sName) === 'audio' && fs.existsSync(sFile)) out.soundSrc = mediaProtoUrl(sName);
     }
   }
   return out;
+}
+
+function mediaProtoUrl(name) {
+  return `troll://media/${encodeURIComponent(path.basename(String(name || '')))}`;
 }
 
 // Build a media-playback fx for one of your uploaded audio files.
@@ -388,7 +409,7 @@ function soundFileFx(name) {
   const base = path.basename(String(name || ''));
   const file = path.join(MEDIA_DIR, base);
   if (mediaKind(base) === 'audio' && fs.existsSync(file)) {
-    return { id: 'media', kind: 'audio', mode: 'play', name: base, src: pathToFileURL(file).href };
+    return { id: 'media', kind: 'audio', mode: 'play', name: base, src: mediaProtoUrl(base) };
   }
   return null;
 }
@@ -474,6 +495,36 @@ function cloudPush(obj) {
   if (panel && !panel.isDestroyed()) panel.webContents.send('cloud:push', obj);
 }
 
+// ---------------------------------------------------------------- auto-update
+
+let pendingDownloadUrl = null;
+
+function repoUrl() {
+  const info = updater.parseRepo(pkg.repository);
+  return info ? `https://github.com/${info.owner}/${info.repo}` : 'https://github.com';
+}
+
+function trayBalloon(title, content) {
+  if (process.platform === 'win32' && tray) tray.displayBalloon({ icon: ICON_PATH, title, content });
+  else if (Notification.isSupported()) new Notification({ title, body: content }).show();
+}
+
+// Runs in the background a few seconds after launch. Never blocks startup.
+async function runUpdateCheck() {
+  const r = await updater.check({ root: ROOT, localVersion: pkg.version, pkg, apply: true });
+  if (r.updated) {
+    config.justUpdatedTo = r.version;
+    saveConfig();
+    quitting = true;
+    app.relaunch();
+    app.exit(0);
+  } else if (r.available) {
+    // ZIP install: can't self-replace, so point them at the download.
+    pendingDownloadUrl = repoUrl();
+    trayBalloon(`Update available (v${r.version})`, 'Click here to open GitHub and download the new version.');
+  }
+}
+
 // ---------------------------------------------------------------- app lifecycle
 
 if (!app.requestSingleInstanceLock()) {
@@ -486,6 +537,18 @@ if (!app.requestSingleInstanceLock()) {
     saveConfig();
     fs.mkdirSync(MEDIA_DIR, { recursive: true });
     if (config.openAtLogin !== undefined) applyAutoLaunch();
+
+    // troll://media/<name> streams a file from the media folder to the overlay.
+    protocol.handle('troll', (request) => {
+      try {
+        const u = new URL(request.url);
+        if (u.hostname !== 'media') return new Response('', { status: 404 });
+        const name = path.basename(decodeURIComponent(u.pathname).replace(/^\/+/, ''));
+        const file = path.join(MEDIA_DIR, name);
+        if (!mediaKind(name) || !fs.existsSync(file)) return new Response('', { status: 404 });
+        return net.fetch(pathToFileURL(file).href);
+      } catch { return new Response('', { status: 400 }); }
+    });
 
     director = createDirector({
       sendToOverlay: (fx) => {
@@ -517,6 +580,11 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.on('overlay:visible', (_e, visible) => showOverlay(!!visible));
     ipcMain.on('overlay:speak-native', (_e, { text, rate }) => speakNative(text, Number(rate) || 1));
+    ipcMain.on('overlay:report', (_e, text) => {
+      const msg = { type: 'error', text: String(text || '').slice(0, 200) };
+      if (server) server.broadcast(msg);
+      cloudPush(msg);
+    });
     ipcMain.handle('panel:info', () => connectionInfo());
     ipcMain.on('panel:hide', () => hideToTray());
     ipcMain.on('panel:test', (_e, id) => director.trigger({ id: FX_IDS.has(id) ? id : 'jumpscare' }, 0));
@@ -543,6 +611,19 @@ if (!app.requestSingleInstanceLock()) {
     globalShortcut.register(SHORTCUT_PANIC, () => director.stopAll());
 
     maybeAskAutoLaunch();
+
+    // Tell the user we just updated (set by the previous run before relaunch).
+    if (config.justUpdatedTo) {
+      const v = config.justUpdatedTo;
+      delete config.justUpdatedTo;
+      saveConfig();
+      setTimeout(() => trayBalloon('Troll Remote updated', `You're now on v${v}.`), 1500);
+    }
+
+    // Check GitHub for a newer version in the background (never blocks startup).
+    if (config.autoUpdate !== false && !process.env.TROLL_NO_UPDATE) {
+      setTimeout(() => { runUpdateCheck().catch((e) => console.error('Update check failed:', e.message)); }, 2500);
+    }
 
     console.log(`Troll Remote running. Open ${(await connectionInfo()).url} on your iPad.`);
   });

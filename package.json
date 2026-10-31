@@ -1,9 +1,11 @@
 {
   "name": "troll-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Prank your friend on your PC from your iPad: jumpscares, sounds, text-to-speech and more.",
   "main": "src/main.js",
   "private": true,
+  "repository": "github:pebbleford/Troll-app",
+  "updateBranch": "claude/bold-maxwell-xw5cru",
   "scripts": {
     "start": "electron ."
   },

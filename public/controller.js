@@ -498,9 +498,29 @@ const params = new URLSearchParams(location.search);
 const urlCode = (params.get('code') || '').toUpperCase();
 if (params.has('code')) { localStorage.setItem('trollCode', urlCode); history.replaceState(null, '', location.pathname); }
 
+function showInfo(title, text) {
+  $('infoTitle').textContent = title;
+  $('infoText').textContent = text;
+  $('infoModal').hidden = false;
+}
+
+// When this page is served over https (e.g. hosted on GitHub Pages) it can't
+// reach the PC's local ws:// address, so it must use the cloud (sign-in).
+const HOSTED = location.protocol === 'https:';
+
 async function decideEntry(forceChoose) {
   const savedCode = (localStorage.getItem('trollCode') || '').toUpperCase();
   const mode = localStorage.getItem('trollMode');
+
+  if (HOSTED) {
+    $('toCode').style.display = 'none';           // local Wi-Fi mode isn't possible here
+    if (!TrollCloud.isConfigured()) {
+      return showInfo('Almost there', 'This hosted remote needs the cloud set up (a Firebase project) to reach your PC. Add it following the README, or — on the same Wi-Fi as the PC — open the local address shown in the Troll Remote window instead.');
+    }
+    try { await TrollCloud.init(); } catch { return showInfo('No internet', "Couldn't load the cloud sign-in. Check your connection and reload."); }
+    TrollCloud.onUser((user) => (user ? startAccountMode() : askSignIn()));
+    return;
+  }
 
   // If an account is set up and wanted, let Firebase restore the saved session.
   if (TrollCloud.isConfigured() && mode !== 'code') {

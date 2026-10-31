@@ -11,7 +11,10 @@ the PC talking to them out loud.
 ## Setup (Windows)
 
 1. Install **Node.js LTS** from <https://nodejs.org> (one time only).
-2. Download this project (green **Code** button → **Download ZIP**) and unzip it.
+2. Get the project. For **automatic updates**, install [Git](https://git-scm.com)
+   and run `git clone https://github.com/pebbleford/Troll-app` (this lets the app
+   update itself). Or, the no-Git way: green **Code** button → **Download ZIP** and
+   unzip it (updates then just notify you instead of installing themselves).
 3. Double-click **`start.bat`**. The first run takes a minute while it installs.
 4. If Windows Firewall asks, click **Allow access** (Private networks). The iPad
    can't connect without this.
@@ -133,6 +136,43 @@ cloud is only for controlling the PC when you're **away** from its network.
 > thumbnails still need the same Wi-Fi; firing effects, talking, and closing apps
 > all work over the cloud.
 
+## Keeping it updated
+
+Every time it starts, Troll Remote quietly checks GitHub for a newer version
+(based on the version number). It never blocks startup.
+
+- **Installed with `git clone`:** it updates itself automatically — pulls the new
+  version, reinstalls anything needed, and restarts. You'll get a little "Updated
+  to vX" note. Your uploaded media, settings and `firebase-config.js` are left
+  untouched.
+- **Installed from a ZIP:** it can't safely replace its own files, so instead it
+  pops a tray notification when a new version is out — click it to open GitHub and
+  download the update.
+
+You can turn this off in the tray menu (**Update automatically on start**).
+
+## Open the remote from anywhere (GitHub Pages)
+
+You can host the **iPad remote page** at a permanent web address with GitHub
+Pages, so you (or anyone you trust) can open it without the PC serving it — great
+for adding it to your Home Screen.
+
+1. In your fork/repo on GitHub: **Settings → Pages → Build and deployment →
+   Source: GitHub Actions**. The included workflow publishes the page on every
+   push; your link will be `https://<your-username>.github.io/Troll-app/`.
+2. Because a secure `https` page can't talk to a plain `ws://` address on your
+   local network, the hosted page works through the **cloud (Firebase)** only —
+   so set up Firebase first (see above), then add your web-config values under
+   **Settings → Secrets and variables → Actions → Variables** as
+   `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`,
+   `FIREBASE_STORAGE_BUCKET`, `FIREBASE_SENDER_ID`, `FIREBASE_APP_ID`.
+3. Open the link on your iPad, sign in, and **Add to Home Screen**. It now works
+   from anywhere.
+
+If you're on the same Wi-Fi as the PC, you don't need any of this — just use the
+QR code / local address as usual (that's the only way LAN uploads and photo
+thumbnails work).
+
 ## Good to know
 
 - **Scares not showing over the game?** Set the game's display mode to
@@ -144,7 +184,10 @@ cloud is only for controlling the PC when you're **away** from its network.
   auto-starts it opens straight to the tray, hidden.
 - **Multiple monitors?** Right-click the tray icon → *Show scares on screen* to pick one.
 - **Your own media:** drop files in the `media` folder, or upload them from the
-  iPad. Images, mp3/wav/ogg/m4a sounds and mp4/webm videos are supported.
+  iPad. Images, mp3/wav/ogg/m4a sounds and mp4/webm videos are supported. (MP3s
+  and videos now play reliably — they're served to the overlay over an internal
+  channel instead of a raw file path, which some Windows setups refused.) If a
+  file ever won't play, the iPad now shows the reason.
 - **iPad can't connect?** Make sure both are on the same Wi-Fi (not a guest network),
   allow the app through the firewall, and try the other addresses listed under the QR code.
 - Only someone with the 6-letter code (or, if you set up sign-in, your account)

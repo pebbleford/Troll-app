@@ -37,12 +37,20 @@ function speak(text, style) {
 
 // ------------------------------------------------------------ your own files
 
-function playFile(src) {
+function reportError(text) {
+  try { if (window.troll && window.troll.report) window.troll.report(text); } catch { /* */ }
+}
+
+function playFile(src, label) {
   const a = new Audio(src);
   a.volume = volume;
   mediaAudio.add(a);
-  a.onended = a.onerror = () => mediaAudio.delete(a);
-  a.play().catch(() => mediaAudio.delete(a));
+  a.onended = () => mediaAudio.delete(a);
+  a.onerror = () => {
+    mediaAudio.delete(a);
+    reportError(`Couldn't play ${label || 'that sound'} (${(a.error && a.error.message) || 'unsupported file'}).`);
+  };
+  a.play().catch((e) => { mediaAudio.delete(a); reportError(`Couldn't play ${label || 'that sound'} (${e.message}).`); });
 }
 
 function playMedia(fx) {
@@ -52,14 +60,14 @@ function playMedia(fx) {
       Visuals.showImage(fx.src);
     } else {
       // A custom jumpscare can bring its own sound; otherwise use the scream.
-      if (fx.soundSrc) playFile(fx.soundSrc);
+      if (fx.soundSrc) playFile(fx.soundSrc, fx.name);
       else Sounds.scream();
       Visuals.jumpscare({ src: fx.src });
     }
   } else if (fx.kind === 'video') {
-    Visuals.playVideo(fx.src, volume);
+    Visuals.playVideo(fx.src, volume, () => reportError(`Couldn't play ${fx.name || 'that video'} (unsupported file).`));
   } else if (fx.kind === 'audio') {
-    playFile(fx.src);
+    playFile(fx.src, fx.name);
   }
 }
 
@@ -74,7 +82,7 @@ function stopAll() {
 }
 
 const FX = {
-  jumpscare: (fx) => { if (fx && fx.soundSrc) playFile(fx.soundSrc); else Sounds.scream(); Visuals.jumpscare(); },
+  jumpscare: (fx) => { if (fx && fx.soundSrc) playFile(fx.soundSrc, fx.name); else Sounds.scream(); Visuals.jumpscare(); },
   flashbang: () => { Sounds.flashbang(); Visuals.flashbang(); },
   crash: () => Visuals.crash(),
   crack: () => { Sounds.glass(); Visuals.crack(); },

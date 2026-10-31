@@ -793,15 +793,15 @@ const Visuals = (() => {
     });
   }
 
-  function playVideo(src, volume) {
+  function playVideo(src, volume, onError) {
     return scene((s) => {
       s.add(el('div', 'layer', 'background:#000'));
       const v = s.add(el('video', 'layer', 'object-fit:contain;width:100%;height:100%'));
       v.src = src;
       v.volume = volume;
       v.onended = () => s.end();
-      v.onerror = () => s.end();
-      v.play().catch(() => s.end());
+      v.onerror = () => { if (onError) onError(); s.end(); };
+      v.play().catch(() => { if (onError) onError(); s.end(); });
       s.onEnd(() => { v.pause(); v.removeAttribute('src'); v.load(); });
       s.after(60000, s.end);
     });

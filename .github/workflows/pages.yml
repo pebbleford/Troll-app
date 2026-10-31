@@ -1,0 +1,73 @@
+# Publishes the iPad remote page (public/) to GitHub Pages, so you have a
+# permanent https link you can open or "Add to Home Screen" from anywhere.
+#
+# The hosted page can only reach your PC through the cloud (Firebase), because a
+# secure https page isn't allowed to talk to a plain ws:// address on your local
+# network. So it's useful once you've set up Firebase (see the README).
+#
+# To turn it on: repo Settings -> Pages -> Build and deployment -> Source:
+# "GitHub Actions". Then (optional) add your Firebase web config under
+# Settings -> Secrets and variables -> Actions -> Variables, as FIREBASE_API_KEY,
+# FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET,
+# FIREBASE_SENDER_ID and FIREBASE_APP_ID. These are not secret (web apps ship
+# them); your data is protected by the Firestore rules + your password.
+
+name: Deploy iPad remote to GitHub Pages
+
+on:
+  push:
+    branches: ["claude/bold-maxwell-xw5cru"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site from public/
+        env:
+          FB_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FB_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
+          FB_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FB_STORAGE_BUCKET: ${{ vars.FIREBASE_STORAGE_BUCKET }}
+          FB_SENDER_ID: ${{ vars.FIREBASE_SENDER_ID }}
+          FB_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+        run: |
+          mkdir -p site
+          cp -r public/* site/
+          if [ -n "$FB_API_KEY" ]; then
+            echo "Injecting Firebase config from repo variables."
+            cat > site/firebase-config.js <<EOF
+          window.FIREBASE_CONFIG = {
+            apiKey: "$FB_API_KEY",
+            authDomain: "$FB_AUTH_DOMAIN",
+            projectId: "$FB_PROJECT_ID",
+            storageBucket: "$FB_STORAGE_BUCKET",
+            messagingSenderId: "$FB_SENDER_ID",
+            appId: "$FB_APP_ID"
+          };
+          window.FIREBASE_SDK_VERSION = "10.14.1";
+          EOF
+          else
+            echo "No FIREBASE_* variables set; deploying without cloud config."
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
