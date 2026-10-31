@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('panel', {
   test: (id) => ipcRenderer.send('panel:test', id),
   openMedia: () => ipcRenderer.send('panel:open-media'),
   setAutolaunch: (on) => ipcRenderer.send('panel:set-autolaunch', on),
+  micDevices: () => ipcRenderer.invoke('mic:devices'),
+  setMicDevice: (d) => ipcRenderer.send('panel:set-mic-device', d),
   quit: () => ipcRenderer.send('panel:quit'),
 });
 

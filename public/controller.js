@@ -29,10 +29,16 @@ const PHRASES = [
 
 const EMOJIS = ['💩', '🤡', '💀', '🗿', '😂', '🐸', '🕷️', '🔥', '🐀', '👁️'];
 
+const MIC_PHRASES = [
+  'Guys I think my mic is broken', 'Can everyone hear me?', 'I need to confess something',
+  'Why is everyone so bad', 'Carry me please', 'gg go next', 'I can hear you breathing', 'Is this thing on',
+];
+
 const $ = (id) => document.getElementById(id);
 
 let delay = 0;
 let voice = 'normal';
+let micVoice = 'normal';
 let msgStyle = 'creepy';
 let pending = [];
 let mediaList = [];
@@ -256,6 +262,13 @@ for (const p of PHRASES) {
   $('phrases').appendChild(b);
 }
 
+for (const p of MIC_PHRASES) {
+  const b = document.createElement('button');
+  b.textContent = p;
+  b.addEventListener('click', () => micSend(p));
+  $('micPhrases').appendChild(b);
+}
+
 function chipGroup(id, onPick) {
   $(id).addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
@@ -266,7 +279,15 @@ function chipGroup(id, onPick) {
 }
 chipGroup('delayChips', (c) => { delay = c.dataset.delay === 'random' ? 'random' : Number(c.dataset.delay); });
 chipGroup('voiceChips', (c) => { voice = c.dataset.voice; });
+chipGroup('micVoiceChips', (c) => { micVoice = c.dataset.voice; });
 chipGroup('styleChips', (c) => { msgStyle = c.dataset.style; });
+
+function micSend(text) {
+  text = String(text || '').trim();
+  if (!text) return toast('Type something first', true);
+  if (Net.send({ type: 'micSay', text, voice: micVoice, delay })) toast(`🎤 "${text}"${delayLabel() || ''}`);
+}
+$('micBtn').addEventListener('click', () => micSend($('micText').value));
 
 $('sayBtn').addEventListener('click', () => {
   const text = $('sayText').value.trim();
@@ -375,6 +396,7 @@ function openSheet(m) {
     add('🎬 Play full screen', () => fire(media('play'), 'Video'));
   } else {
     add('🔊 Play sound', () => fire(media('play'), 'Sound'));
+    add('🎤 Play through the mic', () => { if (Net.send({ type: 'micPlay', name: m.name })) toast(`🎤 ${m.name}`); });
     // Assign this real sound to a soundboard button (replaces the built-in one).
     const wrap = document.createElement('div');
     wrap.className = 'sheet-sound';

@@ -82,6 +82,21 @@
       <button class="go" id="sayBtn">Say it</button>
     </div>
 
+    <h2>🎤 Talk through the mic</h2>
+    <p class="section-note">Speaks into your friend's game / Discord as if it came from their mic. Needs the virtual-cable setup (README) picked in the PC window.</p>
+    <div class="card">
+      <textarea id="micText" rows="2" maxlength="200" placeholder="Type what to say through the mic…"></textarea>
+      <div class="chips" id="micVoiceChips">
+        <button class="chip on" data-voice="normal">Normal</button>
+        <button class="chip" data-voice="deep">😈 Deep</button>
+        <button class="chip" data-voice="chipmunk">🐿️ Chipmunk</button>
+        <button class="chip" data-voice="creepy">🧟 Creepy</button>
+        <button class="chip" data-voice="fast">⚡ Fast</button>
+      </div>
+      <div class="phrases" id="micPhrases"></div>
+      <button class="go" id="micBtn">🎤 Send through mic</button>
+    </div>
+
     <h2>💬 Text on screen</h2>
     <div class="card">
       <input type="text" id="msgText" maxlength="120" placeholder="I can see you">

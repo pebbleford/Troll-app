@@ -48,6 +48,8 @@
     #cloudSection[data-state="in"] #cloudStatus { color: #22c55e; }
     .cloud-off { font-size: 12.5px; color: #9a9aab; line-height: 1.5; }
     .cloud-off code { background: #24242f; padding: 1px 5px; border-radius: 4px; }
+    select { width: 100%; background: #24242f; border: 1px solid #33333f; border-radius: 8px; padding: 10px; font: inherit; color: #fff; }
+    .mic-current { font-size: 13px; color: #c4b5fd; }
   </style>
 </head>
 <body>
@@ -78,6 +80,14 @@
 
   <div class="card">
     <label class="check"><input type="checkbox" id="autolaunch"> Start automatically when this PC turns on</label>
+  </div>
+
+  <div class="card" id="micCard">
+    <h2>🎤 Mic troll</h2>
+    <p class="cloud-off">Speak messages out of the PC's microphone (into a game / Discord). You need a free <b>virtual audio cable</b> — see the README. Pick it here, then set your voice app's microphone to that same cable.</p>
+    <div id="micCurrent" class="mic-current"></div>
+    <select id="micDevice" hidden></select>
+    <button id="micChoose">Choose microphone device…</button>
   </div>
 
   <div class="buttons">

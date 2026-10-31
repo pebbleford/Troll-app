@@ -7,7 +7,7 @@
 //  - Optionally, when you add a Firebase project, the panel window also relays
 //    commands through the cloud so the iPad works from anywhere (see cloud.js).
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage, shell, dialog, Notification, protocol, net } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage, shell, dialog, Notification, protocol, net, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -37,6 +37,7 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const MEDIA_DIR = path.join(ROOT, 'media');
 const ICON_PATH = path.join(ROOT, 'assets', 'icon.png');
 const FIREBASE_CONFIG = path.join(ROOT, 'firebase-config.js');
+let TTS_DIR = ''; // set once app is ready (needs userData path)
 const DEFAULT_PORT = Number(process.env.TROLL_PORT) || 4545;
 
 const SHORTCUT_PANEL = 'CommandOrControl+Alt+Shift+T';
@@ -165,6 +166,7 @@ async function connectionInfo() {
     clients: clientCount,
     openAtLogin: !!config.openAtLogin,
     cloudConfigured: cloudConfigured(),
+    micDeviceLabel: config.micDeviceLabel || '',
     pcName: os.hostname(),
     shortcuts: { panel: SHORTCUT_PANEL, panic: SHORTCUT_PANIC },
     platform: process.platform,
@@ -370,6 +372,44 @@ function speakNative(text, rate) {
   }
 }
 
+// ---------------------------------------------------------------- mic trolls
+
+function ttsUrl(wavPath) {
+  return `troll://tts/${encodeURIComponent(path.basename(wavPath))}`;
+}
+
+// Render spoken text to a wav file so it can be routed into the virtual mic.
+function renderTts(text) {
+  return new Promise((resolve) => {
+    text = String(text).slice(0, 300);
+    try { fs.mkdirSync(TTS_DIR, { recursive: true }); } catch { /* */ }
+    // Tidy up old clips.
+    try {
+      for (const f of fs.readdirSync(TTS_DIR)) {
+        const fp = path.join(TTS_DIR, f);
+        if (Date.now() - fs.statSync(fp).mtimeMs > 120000) fs.rmSync(fp, { force: true });
+      }
+    } catch { /* */ }
+    const out = path.join(TTS_DIR, `m${Date.now()}.wav`);
+    const done = (err) => resolve(!err && fs.existsSync(out) && fs.statSync(out).size > 44 ? out : null);
+
+    if (process.platform === 'win32') {
+      const script = 'Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; ' +
+        '$s.SetOutputToWaveFile($env:TROLL_WAV); $s.Speak($env:TROLL_TEXT); $s.Dispose()';
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+        windowsHide: true, timeout: 15000, env: { ...process.env, TROLL_WAV: out, TROLL_TEXT: text },
+      }, done);
+    } else if (process.platform === 'darwin') {
+      execFile('say', ['-o', out, '--file-format=WAVE', '--data-format=LEI16@22050', text], { timeout: 15000 }, done);
+    } else {
+      execFile('espeak', ['-w', out, text], { timeout: 15000 }, (err) => {
+        if (!err) return done(null);
+        execFile('espeak-ng', ['-w', out, text], { timeout: 15000 }, done);
+      });
+    }
+  });
+}
+
 // ---------------------------------------------------------------- remote control messages
 
 function cleanFx(fx) {
@@ -473,6 +513,22 @@ async function handleMessage(msg, reply) {
       reply({ type: 'apps', list: await processes.listApps(), error: processes.getLastError() });
       break;
     }
+    case 'micSay': {
+      if (!config.micDevice) return reply({ type: 'error', text: 'Set up the mic first on the PC: install a virtual audio cable and pick it in the Troll Remote window.' });
+      const text = String(msg.text || '').trim();
+      if (!text) return reply({ type: 'error', text: 'Type a message first.' });
+      const wav = await renderTts(text);
+      if (!wav) return reply({ type: 'error', text: "Couldn't make the voice on the PC." });
+      director.trigger({ id: 'micAudio', src: ttsUrl(wav), voice: typeof msg.voice === 'string' ? msg.voice.slice(0, 20) : 'normal', device: config.micDevice, label: 'mic message' }, msg.delay, 'mic message');
+      break;
+    }
+    case 'micPlay': {
+      if (!config.micDevice) return reply({ type: 'error', text: 'Set up the mic first on the PC: install a virtual audio cable and pick it in the Troll Remote window.' });
+      const name = path.basename(String(msg.name || ''));
+      if (mediaKind(name) !== 'audio' || !fs.existsSync(path.join(MEDIA_DIR, name))) return reply({ type: 'error', text: 'That sound is gone.' });
+      director.trigger({ id: 'micAudio', src: mediaProtoUrl(name), voice: 'normal', device: config.micDevice, label: name }, msg.delay, name);
+      break;
+    }
     case 'mapSound': {
       const id = String(msg.id || '');
       if (!FX_IDS.has(id)) break;
@@ -538,17 +594,33 @@ if (!app.requestSingleInstanceLock()) {
     fs.mkdirSync(MEDIA_DIR, { recursive: true });
     if (config.openAtLogin !== undefined) applyAutoLaunch();
 
-    // troll://media/<name> streams a file from the media folder to the overlay.
+    TTS_DIR = path.join(app.getPath('userData'), 'tts');
+
+    // troll://media/<name> and troll://tts/<name> stream a file to the overlay.
     protocol.handle('troll', (request) => {
       try {
         const u = new URL(request.url);
-        if (u.hostname !== 'media') return new Response('', { status: 404 });
         const name = path.basename(decodeURIComponent(u.pathname).replace(/^\/+/, ''));
-        const file = path.join(MEDIA_DIR, name);
-        if (!mediaKind(name) || !fs.existsSync(file)) return new Response('', { status: 404 });
-        return net.fetch(pathToFileURL(file).href);
+        if (u.hostname === 'media') {
+          const file = path.join(MEDIA_DIR, name);
+          if (!mediaKind(name) || !fs.existsSync(file)) return new Response('', { status: 404 });
+          return net.fetch(pathToFileURL(file).href);
+        }
+        if (u.hostname === 'tts') {
+          const file = path.join(TTS_DIR, name);
+          if (!/\.(wav|aiff)$/i.test(name) || !fs.existsSync(file)) return new Response('', { status: 404 });
+          return net.fetch(pathToFileURL(file).href);
+        }
+        return new Response('', { status: 404 });
       } catch { return new Response('', { status: 400 }); }
     });
+
+    // Allow the overlay to see audio output device labels (needed to route mic
+    // trolls to the virtual cable). Only "media" is granted.
+    try {
+      session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === 'media'));
+      session.defaultSession.setPermissionCheckHandler((_wc, perm) => perm === 'media');
+    } catch { /* ignore */ }
 
     director = createDirector({
       sendToOverlay: (fx) => {
@@ -591,6 +663,19 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('panel:open-media', () => shell.openPath(MEDIA_DIR));
     ipcMain.on('panel:set-autolaunch', (_e, on) => { config.openAtLogin = !!on; saveConfig(); applyAutoLaunch(); refreshTray(); });
     ipcMain.on('panel:quit', () => app.quit());
+
+    // Mic troll device picker: the overlay enumerates the PC's audio outputs.
+    ipcMain.handle('mic:devices', () => new Promise((resolve) => {
+      if (!overlay || overlay.isDestroyed()) return resolve({ devices: [], selected: config.micDevice || '' });
+      const timer = setTimeout(() => resolve({ devices: [], selected: config.micDevice || '' }), 6000);
+      ipcMain.once('overlay:mic-devices', (_e, list) => { clearTimeout(timer); resolve({ devices: list || [], selected: config.micDevice || '' }); });
+      overlay.webContents.send('overlay:enumerate-mic');
+    }));
+    ipcMain.on('panel:set-mic-device', (_e, d) => {
+      config.micDevice = String((d && d.deviceId) || '');
+      config.micDeviceLabel = String((d && d.label) || '');
+      saveConfig();
+    });
 
     // Bridge between the cloud relay (panel renderer) and the effect engine.
     ipcMain.handle('cloud:lan-presence', () => lanPresence());

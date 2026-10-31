@@ -71,6 +71,43 @@ function playMedia(fx) {
   }
 }
 
+// ------------------------------------------------------------ mic trolls
+// Route audio to a chosen output device (a virtual audio cable), so it shows up
+// as the PC's microphone in a game / Discord.
+
+const MIC_RATE = { normal: 1, deep: 0.8, chipmunk: 1.45, creepy: 0.72, fast: 1.7 };
+
+async function listOutputs() {
+  // Getting (then immediately dropping) mic access unlocks the device labels.
+  try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); }
+  catch { /* labels may be blank, but ids still work */ }
+  let devices = [];
+  try {
+    devices = (await navigator.mediaDevices.enumerateDevices())
+      .filter((d) => d.kind === 'audiooutput' && d.deviceId)
+      .map((d) => ({ deviceId: d.deviceId, label: d.label || 'Audio output' }));
+  } catch { /* */ }
+  if (window.troll && window.troll.micDevices) window.troll.micDevices(devices);
+}
+
+async function playToDevice(src, device, rate, label) {
+  try {
+    const a = new Audio(src);
+    a.preservesPitch = false;
+    try { a.mozPreservesPitch = false; a.webkitPreservesPitch = false; } catch { /* */ }
+    a.playbackRate = rate || 1;
+    a.volume = 1;
+    if (device && a.setSinkId) {
+      try { await a.setSinkId(device); }
+      catch (e) { return reportError(`Mic device not available (${e.message}). Re-pick it in the PC window.`); }
+    }
+    mediaAudio.add(a);
+    a.onended = () => mediaAudio.delete(a);
+    a.onerror = () => { mediaAudio.delete(a); reportError(`Couldn't play ${label || 'the mic message'}.`); };
+    await a.play();
+  } catch (e) { reportError(`Mic troll failed (${e.message}).`); }
+}
+
 // ------------------------------------------------------------ dispatcher
 
 function stopAll() {
@@ -99,6 +136,7 @@ const FX = {
   },
   say: (fx) => speak(fx.text, fx.voice),
   media: playMedia,
+  micAudio: (fx) => playToDevice(fx.src, fx.device, MIC_RATE[fx.voice] || 1, fx.label),
   stop: stopAll,
   volume: (fx) => {
     volume = Math.max(0, Math.min(1, Number(fx.value) || 0));
@@ -117,5 +155,6 @@ function run(fx) {
 }
 
 if (window.troll) window.troll.onFx(run);
+if (window.troll && window.troll.onEnumerateMic) window.troll.onEnumerateMic(listOutputs);
 // Handy for testing in a normal browser: run({ id: 'jumpscare' })
 window.run = run;
