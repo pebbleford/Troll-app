@@ -43,6 +43,7 @@ home screen like an app. You'll need to enter the 6-letter code (or sign in) onc
 | Jumpscare (face + scream) | Air horn, fart, scream | **Make the PC talk** (text-to-speech, with deep/creepy/chipmunk voices) |
 | Flashbang | Knocking, footsteps, whispers | **Text on screen** (creepy, meme or popup notice) |
 | Fake blue-screen crash | Mosquito buzzing around your head | **Emoji rain** 💩🤡💀 |
+| Fake Windows "Restarting" | | **📺 YouTube**: play any link full-screen on their PC (Rickroll presets included) |
 | Cracked screen | Heartbeat, phone ringing, doorbell | **Your own files**: upload a pic and use it as a jumpscare, or play your own sounds and videos |
 | Spiders crawling | Siren, explosion, glass break | **Delay**: fire in 3s/10s/30s/1min/random so you can act innocent |
 | Ghost walking past | Creepy ambience, static | **👻 Haunt mode**: random creepy noises and sightings every 20–75 s |

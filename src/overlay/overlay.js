@@ -205,6 +205,7 @@ const FX = {
     Visuals.message(fx.text, fx.style);
   },
   say: (fx) => speak(fx.text, fx.voice),
+  youtube: (fx) => Visuals.youtube(fx.vid, fx.start),
   media: playMedia,
   micAudio: (fx) => playToDevice(fx.src, { device: fx.device, deviceLabel: fx.deviceLabel, rate: MIC_RATE[fx.voice] || 1, label: fx.label }),
   stop: stopAll,

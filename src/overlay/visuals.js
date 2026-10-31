@@ -814,12 +814,25 @@ const Visuals = (() => {
     });
   }
 
+  // Full-screen YouTube video (plays on top of the game until STOP).
+  function youtube(id, start) {
+    return scene((s) => {
+      s.add(el('div', 'layer', 'background:#000'));
+      const f = s.add(el('iframe', 'layer', 'border:0;width:100%;height:100%'));
+      f.allow = 'autoplay; encrypted-media; fullscreen';
+      const params = `autoplay=1&start=${start || 0}&rel=0&playsinline=1&controls=0&modestbranding=1&iv_load_policy=3`;
+      f.src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
+      s.onEnd(() => { f.src = 'about:blank'; });
+      s.after(30 * 60 * 1000, s.end); // safety: close after 30 min
+    });
+  }
+
   function stopAll() {
     for (const s of [...active]) s.end();
   }
 
   return {
     jumpscare, flashbang, blackout, glitch, emojiRain, crash, crack, spiders, ghost, eyes, message,
-    showImage, playVideo, stopAll, drawFace,
+    showImage, playVideo, youtube, stopAll, drawFace,
   };
 })();

@@ -29,6 +29,13 @@ const PHRASES = [
 
 const EMOJIS = ['💩', '🤡', '💀', '🗿', '😂', '🐸', '🕷️', '🔥', '🐀', '👁️'];
 
+const YT_PRESETS = [
+  ['🎵 Rickroll', 'dQw4w9WgXcQ'],
+  ['🐱 Nyan Cat', 'QH2-TGUlwu4'],
+  ['🏜️ Sandstorm', 'y6120QOlsfU'],
+  ['🦈 Baby Shark', 'XqZsoesa55w'],
+];
+
 const MIC_PHRASES = [
   'Guys I think my mic is broken', 'Can everyone hear me?', 'I need to confess something',
   'Why is everyone so bad', 'Carry me please', 'gg go next', 'I can hear you breathing', 'Is this thing on',
@@ -373,6 +380,46 @@ $('msgBtn').addEventListener('click', () => {
   fire({ id: 'message', text, style: msgStyle }, 'Message');
 });
 $('stopAll').addEventListener('click', () => { if (Net.send({ type: 'stop' })) toast('Stopped everything'); });
+
+// ---- YouTube ----
+function ytTime(t) {
+  if (/^\d+$/.test(t)) return parseInt(t, 10);
+  let s = 0;
+  const h = /(\d+)h/.exec(t); const m = /(\d+)m/.exec(t); const sec = /(\d+)s/.exec(t);
+  if (h) s += +h[1] * 3600; if (m) s += +m[1] * 60; if (sec) s += +sec[1];
+  return s;
+}
+function parseYouTube(input) {
+  input = String(input || '').trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(input)) return { id: input, start: 0 };
+  let id = null; let start = 0;
+  try {
+    const u = new URL(input.includes('://') ? input : 'https://' + input);
+    const host = u.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+    else if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+      if (u.pathname === '/watch') id = u.searchParams.get('v');
+      else { const m = u.pathname.match(/\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})/); if (m) id = m[1]; }
+    }
+    const t = u.searchParams.get('t') || u.searchParams.get('start');
+    if (t) start = ytTime(t);
+  } catch { /* not a url */ }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? { id, start } : null;
+}
+function playYouTube(id, start, label) {
+  fire({ id: 'youtube', vid: id, start: start || 0 }, label || 'YouTube');
+}
+$('ytBtn').addEventListener('click', () => {
+  const r = parseYouTube($('ytInput').value);
+  if (!r) return toast('Paste a valid YouTube link', true);
+  playYouTube(r.id, r.start);
+});
+for (const [name, id] of YT_PRESETS) {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.addEventListener('click', () => playYouTube(id, 0, name));
+  $('ytPresets').appendChild(b);
+}
 
 let volTimer = null;
 $('volume').addEventListener('input', (e) => {

@@ -52,7 +52,7 @@ const FX_IDS = new Set([
   'scream', 'airhorn', 'fart', 'knock', 'footsteps', 'whispers', 'mosquito', 'heartbeat', 'phone',
   'doorbell', 'ding', 'siren', 'explosion', 'drone', 'static', 'glass',
   // other
-  'say', 'media',
+  'say', 'media', 'youtube',
 ]);
 
 let overlay = null;
@@ -443,6 +443,13 @@ function cleanFx(fx) {
   if (typeof fx.style === 'string') out.style = fx.style.slice(0, 20);
   if (typeof fx.emoji === 'string') out.emoji = fx.emoji.slice(0, 16);
   if (typeof fx.mode === 'string') out.mode = fx.mode.slice(0, 20);
+
+  if (fx.id === 'youtube') {
+    const vid = String(fx.vid || '');
+    if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return null;
+    out.vid = vid;
+    out.start = Math.max(0, Math.min(parseInt(fx.start, 10) || 0, 86400));
+  }
 
   if (fx.id === 'media') {
     const name = path.basename(String(fx.name || ''));
