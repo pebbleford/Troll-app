@@ -48,7 +48,10 @@ jobs:
         run: |
           mkdir -p site
           cp -r public/* site/
-          if [ -n "$FB_API_KEY" ]; then
+          if [ -f firebase-config.js ]; then
+            echo "Using committed firebase-config.js."
+            cp firebase-config.js site/firebase-config.js
+          elif [ -n "$FB_API_KEY" ]; then
             echo "Injecting Firebase config from repo variables."
             cat > site/firebase-config.js <<EOF
           window.FIREBASE_CONFIG = {
