@@ -63,7 +63,9 @@ your own sound files — the app plays any `mp3`/`wav`/`ogg`/`m4a`:
 
 1. Grab a free sound (e.g. from pixabay.com, mixkit.co, or freesound.org — no
    account needed for the first two) on your iPad or PC.
-2. On the iPad, tap **Upload a file** (or drop it in the `media` folder on the PC).
+2. On the iPad, tap **Upload a file** — for a sound, choose **Choose Files** and
+   pick it from the Files app (not the Photo Library, which only has photos/videos).
+   Or just drop it into the `media` folder on the PC.
 3. Tap the uploaded sound → **Use this as a soundboard button** → pick which
    button it should become (e.g. **Scream**, or the **Jumpscare scream**).
 

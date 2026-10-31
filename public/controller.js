@@ -551,7 +551,25 @@ $('upload').addEventListener('change', (e) => {
   toast('Uploading needs the same Wi-Fi, or sign-in', true);
 });
 
+// iOS sometimes hands over a file with a generic name and no extension, which
+// the PC would reject. Derive the extension from the file's MIME type.
+const MIME_EXT = {
+  'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
+  'audio/wave': '.wav', 'audio/vnd.wave': '.wav', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a', 'audio/aac': '.aac', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
+  'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/bmp': '.bmp',
+  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
+};
+const MEDIA_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|mp3|wav|ogg|m4a|aac|flac|mp4|m4v|webm|mov)$/i;
+function uploadName(file) {
+  let name = file.name || 'upload';
+  if (!MEDIA_EXT_RE.test(name)) name += MIME_EXT[(file.type || '').toLowerCase()] || '';
+  return name;
+}
+
 function lanUpload(file) {
+  const name = uploadName(file);
+  if (!MEDIA_EXT_RE.test(name)) return toast("That file type isn't supported", true);
   const xhr = new XMLHttpRequest();
   const bar = $('progress');
   bar.hidden = false;
@@ -565,7 +583,7 @@ function lanUpload(file) {
     else toast(res.error || 'Upload failed', true);
   };
   xhr.onerror = () => { bar.hidden = true; toast('Upload failed', true); };
-  xhr.open('POST', `${Net.lanBase}/api/upload?code=${encodeURIComponent(Net.code)}&name=${encodeURIComponent(file.name)}`);
+  xhr.open('POST', `${Net.lanBase}/api/upload?code=${encodeURIComponent(Net.code)}&name=${encodeURIComponent(name)}`);
   xhr.send(file);
 }
 
@@ -576,6 +594,8 @@ function b64(buf) {
 }
 
 async function cloudUpload(file) {
+  const name = uploadName(file);
+  if (!MEDIA_EXT_RE.test(name)) return toast("That file type isn't supported", true);
   if (file.size > 20 * 1024 * 1024) return toast('Too big for cloud upload (20 MB max)', true);
   const bar = $('progress');
   bar.hidden = false;
@@ -589,7 +609,7 @@ async function cloudUpload(file) {
       await TrollCloud.putChunk(uploadId, i, data.slice(i * CH, (i + 1) * CH));
       bar.firstElementChild.style.width = `${Math.round(((i + 1) / chunks) * 100)}%`;
     }
-    Net.send({ type: 'cloudUpload', uploadId, name: file.name, chunks });
+    Net.send({ type: 'cloudUpload', uploadId, name, chunks });
     toast('Uploaded via cloud — it will appear shortly');
   } catch (err) {
     toast('Cloud upload failed: ' + err.message, true);
