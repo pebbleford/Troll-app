@@ -67,21 +67,25 @@ async function gitBranch(root) {
   return r.ok && r.out && r.out !== 'HEAD' ? r.out : null;
 }
 
-// Read the version field from a branch's package.json on the git remote.
+async function gitRevParse(root, ref) {
+  const r = await sh('git', ['rev-parse', ref], { cwd: root, timeout: 8000 });
+  return r.ok ? r.out : null;
+}
+
+// Version string from a branch's package.json on the remote (for the "updated
+// to vX" message only; the actual trigger is a commit difference).
 async function gitRemoteVersion(root, branch) {
-  const fetch = await sh('git', ['fetch', '--quiet', 'origin', branch], { cwd: root, timeout: 25000 });
-  if (!fetch.ok) return null;
   const show = await sh('git', ['show', `origin/${branch}:package.json`], { cwd: root, timeout: 8000 });
   if (!show.ok) return null;
   try { return JSON.parse(show.out).version; } catch { return null; }
 }
 
-async function applyGitUpdate(root, branch, npmInstall) {
+async function applyGitUpdate(root, branch) {
   // Force the tracked files to match the remote branch. Untracked files
-  // (media/, firebase-config.js, node_modules/) are left alone.
+  // (media/, firebase-config.js if ignored, node_modules/) are left alone.
   const reset = await sh('git', ['reset', '--hard', `origin/${branch}`], { cwd: root, timeout: 20000 });
   if (!reset.ok) return false;
-  if (npmInstall) await sh(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--no-audit', '--no-fund'], { cwd: root, timeout: 240000 });
+  await sh(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--no-audit', '--no-fund'], { cwd: root, timeout: 240000 });
   return true;
 }
 
@@ -93,14 +97,21 @@ async function applyGitUpdate(root, branch, npmInstall) {
 async function check({ root, localVersion, pkg, apply = true }) {
   try {
     if (await isGitClone(root)) {
+      // Git installs sync to the latest commit on their branch, so EVERY push
+      // is picked up on the next start — no version bump needed.
       const branch = (await gitBranch(root)) || pkg.updateBranch;
       if (!branch) return { skipped: 'no-branch' };
-      const remote = await gitRemoteVersion(root, branch);
-      if (!remote) return { skipped: 'no-remote-version' };
-      if (!isNewer(remote, localVersion)) return { upToDate: true, version: remote };
-      if (!apply) return { available: true, version: remote, mode: 'git' };
-      const ok = await applyGitUpdate(root, branch, true);
-      return ok ? { updated: true, version: remote } : { skipped: 'git-apply-failed' };
+      const fetched = await sh('git', ['fetch', '--quiet', 'origin', branch], { cwd: root, timeout: 25000 });
+      if (!fetched.ok) return { skipped: 'fetch-failed' };
+      const local = await gitRevParse(root, 'HEAD');
+      const remote = await gitRevParse(root, `origin/${branch}`);
+      if (!remote) return { skipped: 'no-remote' };
+      if (local === remote) return { upToDate: true };            // already current
+      // Behind or diverged -> force-sync to GitHub.
+      const version = (await gitRemoteVersion(root, branch)) || remote.slice(0, 7);
+      if (!apply) return { available: true, version, mode: 'git' };
+      const ok = await applyGitUpdate(root, branch);
+      return ok ? { updated: true, version } : { skipped: 'git-apply-failed' };
     }
 
     // No git: can only check + notify (can't safely self-replace a ZIP install).

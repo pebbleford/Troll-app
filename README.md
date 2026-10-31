@@ -138,13 +138,14 @@ cloud is only for controlling the PC when you're **away** from its network.
 
 ## Keeping it updated
 
-Every time it starts, Troll Remote quietly checks GitHub for a newer version
-(based on the version number). It never blocks startup.
+Every time it starts, Troll Remote quietly checks GitHub for changes. It never
+blocks startup.
 
-- **Installed with `git clone`:** it updates itself automatically — pulls the new
-  version, reinstalls anything needed, and restarts. You'll get a little "Updated
-  to vX" note. Your uploaded media, settings and `firebase-config.js` are left
-  untouched.
+- **Installed with `git clone`:** it syncs to the **latest commit** on its branch
+  automatically — so *every* push is picked up on the next start (no version
+  number bump needed). It pulls the changes, reinstalls anything needed, and
+  restarts, with a little "Updated" note. Your uploaded media, settings and local
+  `firebase-config.js` are left untouched.
 - **Installed from a ZIP:** it can't safely replace its own files, so instead it
   pops a tray notification when a new version is out — click it to open GitHub and
   download the update.
